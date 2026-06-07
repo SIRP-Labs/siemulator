@@ -1,0 +1,14 @@
+services:
+  siemulator:
+    build: .
+    image: sirplabs/siemulator:latest
+    container_name: siemulator
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SIEMULATOR_LOGSCALE_TOKEN: ${SIEMULATOR_LOGSCALE_TOKEN:-logscale-dev-token}
+      SIEMULATOR_QRADAR_TOKEN: ${SIEMULATOR_QRADAR_TOKEN:-qradar-dev-token}
+      SIEMULATOR_ADMIN_KEY: ${SIEMULATOR_ADMIN_KEY:-}
+      SIEMULATOR_LOGSCALE_PREFIX: ${SIEMULATOR_LOGSCALE_PREFIX:-/logscale}
+      SIEMULATOR_QRADAR_PREFIX: ${SIEMULATOR_QRADAR_PREFIX:-/qradar}
