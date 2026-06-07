@@ -30,7 +30,17 @@ jobs:
       - run: docker build -t siemulator:ci .
       - name: smoke-test container
         run: |
-          docker run -d --name s -p 8080:8080 siemulator:ci
-          sleep 3
-          curl -fsS http://localhost:8080/logscale/api/v1/status | grep -q '"mock":true'
-          docker rm -f s
+          docker run -d --name siemulator-smoketest -p 8080:8080 siemulator:ci
+          # Poll up to 15s for the app to bind — uvicorn startup is variable in CI.
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+            if curl -fsS http://localhost:8080/logscale/api/v1/status | grep -q '"mock":true'; then
+              echo "smoke-test passed on attempt $i"
+              docker rm -f siemulator-smoketest
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "smoke-test FAILED — container did not become ready in 15s"
+          docker logs siemulator-smoketest || true
+          docker rm -f siemulator-smoketest
+          exit 1
