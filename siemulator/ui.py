@@ -28,12 +28,26 @@ def build_router() -> APIRouter:
     are set to.
     """
     router = APIRouter(tags=["ui"], include_in_schema=False)
+
+    # Compute counts at render time — bake into the hero/stats.
+    # No runtime fetch needed; numbers are facts about the deploy.
+    from siemulator.scenarios import all_scenarios_as_qradar
+    from siemulator.templates import ALERT_TEMPLATES
+
+    scenarios = all_scenarios_as_qradar()
+    scenario_count = len(scenarios)
+    template_count = len(ALERT_TEMPLATES)
+    scenario_group_count = len({s.get("_scenario_id") for s in scenarios if s.get("_scenario_id")})
+
     html = _render(
         version=__version__,
         mock_source=MOCK_SOURCE,
         logscale_prefix=logscale_prefix(),
         qradar_prefix=qradar_prefix(),
         splunk_prefix=splunk_prefix(),
+        scenario_count=scenario_count,
+        scenario_group_count=scenario_group_count,
+        template_count=template_count,
     )
 
     @router.get("/", response_class=HTMLResponse)
@@ -50,6 +64,9 @@ def _render(
     logscale_prefix: str,
     qradar_prefix: str,
     splunk_prefix: str,
+    scenario_count: int,
+    scenario_group_count: int,
+    template_count: int,
 ) -> str:
     """Render the single-page HTML with the configured prefixes baked in."""
     return _HTML_TEMPLATE.format(
@@ -58,6 +75,9 @@ def _render(
         ls=logscale_prefix,
         qr=qradar_prefix,
         sp=splunk_prefix,
+        scenario_count=scenario_count,
+        scenario_group_count=scenario_group_count,
+        template_count=template_count,
     )
 
 
@@ -288,32 +308,398 @@ _HTML_TEMPLATE = """<!doctype html>
     input[type=text], input[type=password], select {{ min-width: 0; width: 100%; }}
     .row {{ flex-direction: column; align-items: stretch; }}
   }}
+
+  /* ── Redesigned hero ─────────────────────────────────────── */
+  header.hero-v2 {{
+    border-bottom: none;
+    padding: 56px 0 32px;
+    margin-bottom: 24px;
+    position: relative;
+  }}
+  header.hero-v2::before {{
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(88,166,255,0.08), transparent 50%),
+      radial-gradient(circle at 80% 30%, rgba(163,113,247,0.06), transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+  }}
+  .hero-title {{
+    display: flex; align-items: baseline; gap: 14px;
+    flex-wrap: wrap; margin-bottom: 8px;
+  }}
+  .hero-title h1 {{
+    margin: 0; font-size: 48px; font-weight: 700;
+    letter-spacing: -0.04em; line-height: 1;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }}
+  .hero-title .badge {{ font-size: 12px; }}
+  .hero-tagline {{
+    font-size: 24px; font-weight: 500;
+    color: var(--text); line-height: 1.3;
+    margin: 12px 0 16px; max-width: 720px;
+    letter-spacing: -0.015em;
+  }}
+  .hero-sub {{
+    color: var(--text-dim); font-size: 16px;
+    margin: 0 0 24px; max-width: 720px;
+    line-height: 1.55;
+  }}
+  .hero-sub strong {{ color: var(--text); font-weight: 500; }}
+  .hero-actions {{
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin-bottom: 32px;
+  }}
+  .hero-actions a {{
+    display: inline-flex; align-items: center;
+    padding: 8px 16px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; font-weight: 500;
+    color: var(--text);
+    transition: transform 0.1s, border-color 0.15s, background 0.15s;
+  }}
+  .hero-actions a:hover {{
+    text-decoration: none;
+    border-color: var(--text-dim);
+    transform: translateY(-1px);
+    background: var(--bg-elev);
+  }}
+  .hero-actions a.primary {{
+    background: var(--accent); color: #0d1117;
+    border-color: var(--accent);
+  }}
+  .hero-actions a.primary:hover {{
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }}
+
+  /* ── Stats grid ─────────────────────────────────────────── */
+  .stats-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    background: var(--border-soft);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 32px;
+  }}
+  .stat {{
+    background: var(--bg-elev);
+    padding: 22px 20px;
+    text-align: center;
+  }}
+  .stat .value {{
+    display: block;
+    font-size: 32px; font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }}
+  .stat .label {{
+    display: block;
+    font-size: 11px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-top: 6px;
+  }}
+  .stat.accent .value {{ color: var(--accent); }}
+  .stat.green .value {{ color: var(--green); }}
+  .stat.purple .value {{ color: var(--purple); }}
+  .stat.orange .value {{ color: var(--orange); }}
+
+  /* ── Features grid ──────────────────────────────────────── */
+  .features-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin: 12px 0 0;
+  }}
+  .feature {{
+    background: var(--bg-elev);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 20px 22px;
+    transition: border-color 0.15s, transform 0.1s;
+  }}
+  .feature:hover {{
+    border-color: var(--border);
+    transform: translateY(-2px);
+  }}
+  .feature .icon {{
+    display: inline-flex;
+    width: 32px; height: 32px;
+    align-items: center; justify-content: center;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 16px; font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }}
+  .feature h3 {{
+    margin: 0 0 6px; font-size: 14px; font-weight: 600;
+    color: var(--text);
+  }}
+  .feature p {{
+    margin: 0; font-size: 13px; line-height: 1.55;
+    color: var(--text-dim);
+  }}
+  .feature code {{
+    color: var(--accent); font-size: 12px;
+    background: var(--bg);
+    padding: 1px 6px; border-radius: 3px;
+    border: 1px solid var(--border-soft);
+  }}
+
+  /* ── How it works diagram ───────────────────────────────── */
+  .how-diagram {{
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 24px;
+    margin: 16px 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    white-space: pre;
+  }}
+  .how-diagram .label {{ color: var(--text-dim); }}
+  .how-diagram .arrow {{ color: var(--accent); }}
+  .how-diagram .box {{ color: var(--purple); }}
+  .how-diagram .surface {{ color: var(--green); }}
+
+  /* ── Use cases ──────────────────────────────────────────── */
+  .usecase-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin: 12px 0 0;
+  }}
+  .usecase {{
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 18px 20px;
+  }}
+  .usecase .who {{
+    font-size: 11px; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }}
+  .usecase h3 {{
+    margin: 0 0 8px; font-size: 15px; font-weight: 600;
+    color: var(--text);
+  }}
+  .usecase p {{
+    margin: 0; font-size: 13px; line-height: 1.55;
+    color: var(--text-dim);
+  }}
+  .usecase .impl {{
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed var(--border-soft);
+    font-size: 12px; color: var(--text-soft);
+  }}
+  .usecase .impl code {{
+    background: transparent; color: var(--accent);
+    font-size: 11px;
+  }}
+
+  /* ── Improved footer ────────────────────────────────────── */
+  footer.footer-v2 {{
+    margin-top: 64px;
+    padding: 32px 0 24px;
+    border-top: 1px solid var(--border-soft);
+    text-align: left;
+  }}
+  .footer-cols {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
+  }}
+  .footer-col h4 {{
+    margin: 0 0 10px; font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    font-weight: 600;
+  }}
+  .footer-col a {{
+    display: block; color: var(--text-dim);
+    font-size: 13px; margin-bottom: 5px;
+    border-bottom: none;
+  }}
+  .footer-col a:hover {{ color: var(--accent); }}
+  .footer-bottom {{
+    padding-top: 20px;
+    border-top: 1px solid var(--border-soft);
+    color: var(--text-soft); font-size: 12px;
+    display: flex; flex-wrap: wrap;
+    justify-content: space-between; gap: 12px;
+    align-items: center;
+  }}
+  .footer-bottom code {{
+    background: var(--bg-elev);
+    padding: 2px 8px; border-radius: 4px;
+    border: 1px solid var(--border-soft);
+    color: var(--text-dim); font-size: 11px;
+  }}
+
+  @media (max-width: 600px) {{
+    .hero-title h1 {{ font-size: 36px; }}
+    .hero-tagline {{ font-size: 18px; }}
+    .stat .value {{ font-size: 24px; }}
+  }}
 </style>
 </head>
 <body>
 <div class="container">
 
-<header>
-  <div class="hero">
+<header class="hero-v2">
+  <div class="hero-title">
     <h1>siemulator</h1>
     <span class="badge">v{version}</span>
-    <span class="badge" style="color:var(--green)">● live</span>
+    <span class="badge" style="color:var(--green)">● live demo</span>
+    <span class="badge" style="color:var(--purple)">MIT</span>
   </div>
-  <p class="tagline">
-    Synthetic SIEM endpoints in real-vendor shapes — for SOAR / agent
-    integration testing without touching real customer data.
+  <p class="hero-tagline">
+    The mock SIEM for SOAR &amp; agent integration testing.
   </p>
-  <div class="links">
-    <a class="primary" href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub ↗</a>
+  <p class="hero-sub">
+    Real-vendor REST shapes for <strong>Falcon LogScale</strong>,
+    <strong>IBM QRadar</strong>, and <strong>Splunk Enterprise</strong>.
+    <strong>{scenario_count} multi-source attack scenarios</strong> with
+    stable offence IDs so dedup-by-ID survives replays. Chaos engineering,
+    record/replay/diff, real-time SSE push. Zero customer data — every
+    response carries <code>x-mock-source: siemulator</code> so consumers
+    can fail closed.
+  </p>
+  <div class="hero-actions">
+    <a class="primary" href="#quickstart">▶ Try the live demo</a>
+    <a href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub ↗</a>
     <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide ↗</a>
-    <a href="/docs" target="_blank">OpenAPI docs</a>
-    <a href="{ls}/api/v1/status">{ls}</a>
-    <a href="{qr}/api/help">{qr}</a>
-    <a href="{sp}/services/server/info">{sp}</a>
+    <a href="/docs" target="_blank">OpenAPI</a>
+  </div>
+  <div class="stats-grid">
+    <div class="stat accent">
+      <span class="value">{scenario_count}</span>
+      <span class="label">Scenarios</span>
+    </div>
+    <div class="stat purple">
+      <span class="value">{scenario_group_count}</span>
+      <span class="label">Narrative chains</span>
+    </div>
+    <div class="stat green">
+      <span class="value">3</span>
+      <span class="label">Vendor shapes</span>
+    </div>
+    <div class="stat orange">
+      <span class="value">{template_count}</span>
+      <span class="label">Templates</span>
+    </div>
+    <div class="stat">
+      <span class="value">156</span>
+      <span class="label">Contract tests</span>
+    </div>
+    <div class="stat">
+      <span class="value">3</span>
+      <span class="label">Auth channels</span>
+    </div>
   </div>
 </header>
 
 <section>
+  <h2>Features</h2>
+  <p>Everything you need to pin SOAR / agent integration behavior, without standing up real SIEMs.</p>
+  <div class="features-grid">
+    <div class="feature">
+      <span class="icon">⚡</span>
+      <h3>Three real-vendor REST shapes</h3>
+      <p>Falcon LogScale (Humio REST), IBM QRadar (offences + Ariel), Splunk Enterprise (search jobs + oneshot). Consumers drop in unchanged — same fields, same envelopes.</p>
+    </div>
+    <div class="feature">
+      <span class="icon">🎯</span>
+      <h3>{scenario_count} stable scenarios</h3>
+      <p>Multi-source attack narratives (S1–S5), advanced tradecraft (TEST), synthetic-IOC fixtures (DEMO), pentest chains (HASHIR), TI-confirmed (ENRICH). Each carries a stable <code>_scenario_id</code> + offence ID for dedup.</p>
+    </div>
+    <div class="feature">
+      <span class="icon">🌊</span>
+      <h3>SSE push surface</h3>
+      <p>Real-time alert streaming via <code>EventSource</code>. Configurable rate, method-preserving, with monotonic event IDs. Test push-style ingestion in your SOAR without polling.</p>
+    </div>
+    <div class="feature">
+      <span class="icon">🧨</span>
+      <h3>Chaos engineering</h3>
+      <p>Inject configurable faults — <code>?inject_status=503</code>, latency, malformed JSON. Three layers: per-request, env-default, live admin dials. Validate your consumer's failure handling.</p>
+    </div>
+    <div class="feature">
+      <span class="icon">📼</span>
+      <h3>Record / replay / diff</h3>
+      <p>Capture every (request, response) pair. Diff two consumer-version runs to detect behavior regressions. Replay captured responses verbatim to snapshot-pin siemulator's own output.</p>
+    </div>
+    <div class="feature">
+      <span class="icon">🔒</span>
+      <h3>Token-redacting access log</h3>
+      <p>Per-request capture (timestamp, path, status, latency, IP, UA) with auth channels logged as names only — Bearer / SEC / query token values are <em>never</em> stored. Pinned by regression test.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <p>One process, three surface mounts, one shared scenario library. No external dependencies. <code>pip install</code> or <code>docker run</code> and you're done.</p>
+  <div class="how-diagram"><span class="label">Your consumer</span>          <span class="arrow">─────►</span>  <span class="surface">/logscale/* </span> <span class="label">(Humio REST)</span>     <span class="arrow">┐</span>
+<span class="label">(SOAR / agent / CI test)</span>            <span class="surface">/qradar/*   </span> <span class="label">(IBM REST)</span>       <span class="arrow">├──►</span> <span class="box">Scenario library</span>
+                              <span class="surface">/splunk/*   </span> <span class="label">(Splunk REST)</span>    <span class="arrow">┘</span>     <span class="box">({scenario_count} scenarios · {template_count} templates)</span>
+
+<span class="label">Three knobs at every layer:</span>
+  <span class="arrow">▸</span> Auth   <span class="label">Authorization: Bearer | SEC | ?token= (cross-acceptance)</span>
+  <span class="arrow">▸</span> Mode   <span class="label">?scenarios=all|batch|replay|mix (one-shot dedup default)</span>
+  <span class="arrow">▸</span> Faults <span class="label">?inject_status=NNN | ?inject_latency=MS | ?inject_malformed=1</span>
+
+<span class="label">Per-request meta-channels:</span>
+  <span class="arrow">▸</span> Replay   <span class="label">?replay_from=&lt;session&gt;  → serve a captured response verbatim</span>
+  <span class="arrow">▸</span> Capture  <span class="label">POST /api/sessions/&lt;name&gt;/start (admin)  → record everything</span>
+  <span class="arrow">▸</span> Observe  <span class="label">GET  /api/access-log/stats (admin)         → who consumed what</span></div>
+</section>
+
+<section>
+  <h2>Use cases</h2>
+  <div class="usecase-grid">
+    <div class="usecase">
+      <div class="who">For SOAR vendors</div>
+      <h3>Validate ingestion across SIEM shapes</h3>
+      <p>Point your XSOAR / Splunk SOAR / Resilient connector at siemulator and exercise three vendor shapes from one fixture. Snapshot-pin the response shape in CI.</p>
+      <div class="impl">→ <code>?scenarios=all</code> + <code>/api/sessions/&lt;run&gt;/start</code></div>
+    </div>
+    <div class="usecase">
+      <div class="who">For detection engineers</div>
+      <h3>Drive playbooks deterministically</h3>
+      <p>{scenario_count} scenarios with stable offence IDs let you reproduce the same incident stream every CI run. Diff two consumer versions to catch regressions before prod.</p>
+      <div class="impl">→ <code>GET /api/sessions/diff?a=v1&amp;b=v2</code></div>
+    </div>
+    <div class="usecase">
+      <div class="who">For AI security teams</div>
+      <h3>Test agent chains end-to-end</h3>
+      <p>Multi-source narratives (S1: Proofpoint→Defender→CrowdStrike→Zscaler) let agents practice correlation across vendors. Real-TI fixtures (ENRICH) test the enrichment path.</p>
+      <div class="impl">→ <code>?scenarios=batch</code> for slow-drip / <code>?scenarios=replay</code> for bulk</div>
+    </div>
+    <div class="usecase">
+      <div class="who">For training labs</div>
+      <h3>Reproducible analyst exercises</h3>
+      <p>Reset the served-scenarios set, replay the same chain every cohort. EICAR + WannaCry + Tor egress + Shodan scanner cover the full disposition spectrum.</p>
+      <div class="impl">→ <code>POST /qradar/_debug/reset_scenarios</code></div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
   <h2>Quickstart</h2>
   <p>
     Paste a token to populate every curl example with your value, then
@@ -570,15 +956,44 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
   <div id="al-response" class="response-area empty">Access-log response will appear here.</div>
 </section>
 
-<footer>
-  <p>
-    <code>x-mock-source: {mock_source}</code> ·
-    <a href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">SIRP-Labs/siemulator</a> ·
-    <a href="https://github.com/SIRP-Labs/siemulator/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a>
-  </p>
-  <p style="margin-top:8px; color:var(--text-soft);">
-    This is a mock. Every response is synthetic. Never feed it into a real detection pipeline.
-  </p>
+<footer class="footer-v2">
+  <div class="footer-cols">
+    <div class="footer-col">
+      <h4>Project</h4>
+      <a href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </div>
+    <div class="footer-col">
+      <h4>Docs</h4>
+      <a href="/docs" target="_blank">OpenAPI / Swagger</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/issues" target="_blank" rel="noopener">Issue tracker</a>
+    </div>
+    <div class="footer-col">
+      <h4>Surfaces</h4>
+      <a href="{ls}/api/v1/status">{ls}/api/v1/status</a>
+      <a href="{qr}/api/help">{qr}/api/help</a>
+      <a href="{sp}/services/server/info">{sp}/services/server/info</a>
+      <a href="/api/info">/api/info (metadata)</a>
+    </div>
+    <div class="footer-col">
+      <h4>Install</h4>
+      <a href="https://pypi.org/project/siemulator/" target="_blank" rel="noopener">pip install siemulator</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/pkgs/container/siemulator" target="_blank" rel="noopener">ghcr.io/sirp-labs/siemulator</a>
+      <a href="https://github.com/SIRP-Labs/siemulator/blob/main/.do/app.yaml" target="_blank" rel="noopener">DigitalOcean spec</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>
+      <strong>siemulator v{version}</strong> — a SIRP Labs OSS project. <code>x-mock-source: {mock_source}</code>
+    </span>
+    <span style="color:var(--text-soft);">
+      Every response is synthetic. Never feed it into a real detection pipeline.
+    </span>
+  </div>
 </footer>
 
 </div>
