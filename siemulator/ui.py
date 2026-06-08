@@ -525,6 +525,31 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
 </section>
 
 <section>
+  <h2>Record / replay / diff <span class="count">regression testing · admin-gated</span></h2>
+  <p>
+    Capture every (request, response) pair into a named session, then
+    diff two sessions to detect consumer-behaviour regressions.
+    Snapshot-pin siemulator's own output by replaying captured responses
+    via <code>?replay_from=&lt;session&gt;</code> on any bound endpoint.
+  </p>
+  <div class="row">
+    <input id="sess-key" type="password" placeholder="X-Admin-Key" style="flex:1; min-width:200px;">
+    <input id="sess-name" type="text" placeholder="session name (e.g. xsoar-v1)" style="flex:1; min-width:200px;">
+    <button class="primary" onclick="sessAction('start')">▶ Start</button>
+    <button onclick="sessAction('stop')">■ Stop</button>
+    <button onclick="sessList()">List</button>
+  </div>
+  <p style="margin-top:8px;">Diff two sessions (request-stream regression):</p>
+  <div class="row">
+    <input id="sess-diff-a" type="text" placeholder="a (e.g. xsoar-v1)" style="flex:1; min-width:160px;">
+    <input id="sess-diff-b" type="text" placeholder="b (e.g. xsoar-v2)" style="flex:1; min-width:160px;">
+    <button onclick="sessDiff()">Diff</button>
+  </div>
+  <div id="sess-meta" class="response-meta" style="display:none;"></div>
+  <div id="sess-response" class="response-area empty">Session response will appear here.</div>
+</section>
+
+<section>
   <h2>Access log <span class="count">who consumed what · admin-gated</span></h2>
   <p>
     Every request to <code>{ls}/*</code> and <code>{qr}/*</code> is captured
@@ -835,6 +860,53 @@ function toggleTicker() {{
 
 // Clean up on page unload
 window.addEventListener("beforeunload", () => {{ if (_ticker) _ticker.close(); }});
+
+// ── Sessions (record / replay / diff) ──────────────────────────
+async function sessAction(action) {{
+  const key = document.getElementById("sess-key").value;
+  const name = document.getElementById("sess-name").value.trim();
+  if (!name) {{ alert("Session name required"); return; }}
+  const url = `/api/sessions/${{encodeURIComponent(name)}}/${{action}}`;
+  await sessFetch(url, "POST", null, key);
+}}
+
+async function sessList() {{
+  const key = document.getElementById("sess-key").value;
+  await sessFetch("/api/sessions", "GET", null, key);
+}}
+
+async function sessDiff() {{
+  const key = document.getElementById("sess-key").value;
+  const a = document.getElementById("sess-diff-a").value.trim();
+  const b = document.getElementById("sess-diff-b").value.trim();
+  if (!a || !b) {{ alert("Both A and B session names required"); return; }}
+  await sessFetch(`/api/sessions/diff?a=${{encodeURIComponent(a)}}&b=${{encodeURIComponent(b)}}`, "GET", null, key);
+}}
+
+async function sessFetch(url, method, body, key) {{
+  const respArea = document.getElementById("sess-response");
+  const metaArea = document.getElementById("sess-meta");
+  respArea.classList.remove("empty");
+  respArea.textContent = "Loading…";
+  try {{
+    const opts = {{ method, headers: {{ "X-Admin-Key": key }} }};
+    if (body) {{
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(body);
+    }}
+    const resp = await fetch(url, opts);
+    const text = await resp.text();
+    let formatted = text;
+    try {{ formatted = JSON.stringify(JSON.parse(text), null, 2); }} catch (e) {{}}
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status ${{resp.ok ? "ok" : "fail"}}">${{resp.status}} ${{resp.statusText}}</span><span style="margin-left:auto; color:var(--text-soft);">${{method}} ${{url}}</span>`;
+    respArea.textContent = formatted;
+  }} catch (e) {{
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status fail">network error</span><span>${{escapeHtml(e.message)}}</span>`;
+    respArea.textContent = "";
+  }}
+}}
 
 // ── Faults dials ───────────────────────────────────────────────
 async function getFaults() {{

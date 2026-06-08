@@ -40,6 +40,7 @@ endpoints interactively, and copy curl snippets — try the live demo at
 - [Use as a test fixture](#use-as-a-test-fixture)
 - [Wire it into your SIEM / SOAR](#wire-it-into-your-siem--soar)
 - [Debug endpoints](#debug-endpoints)
+- [Record / replay / diff](#record--replay--diff)
 - [Access log](#access-log)
 - [Safety markers](#safety-markers)
 - [Architecture](#architecture)
@@ -132,6 +133,8 @@ All via env vars. Defaults work for local testing — override in production.
 | `SIEMULATOR_ACCESS_LOG_ENABLED`| `true`                 | Capture every API request to a ring + stdout (see [Access log](#access-log)) |
 | `SIEMULATOR_ACCESS_LOG_SIZE`   | `5000`                 | In-memory ring capacity                                |
 | `SIEMULATOR_ACCESS_LOG_SKIP_HEALTH` | `false`           | Skip `/status` / `/api/help` to reduce noise           |
+| `SIEMULATOR_SESSIONS_ENABLED`  | `true`                 | Record / replay / diff (see [Record / replay / diff](#record--replay--diff)) |
+| `SIEMULATOR_SESSIONS_DIR`      | `./siemulator-sessions`| JSONL persistence directory                            |
 
 See [`.env.example`](.env.example).
 
@@ -459,6 +462,92 @@ to diagnose "my poller hits siemulator but my SOAR shows zero incidents"
 — you can see the exact path, query params, auth channel, and first-row
 preview that went over the wire.
 
+## Record / replay / diff
+
+Turns siemulator into a **regression-testing tool for SOC tooling
+teams**. The core flow:
+
+1. Run your consumer (XSOAR / Splunk SOAR / Sentinel playbook / custom
+   integration) against siemulator while a named session is recording.
+2. Upgrade or modify your consumer.
+3. Run the new version against siemulator with a different session
+   name.
+4. Diff the two sessions — *"did the consumer's request stream
+   change?"* is your regression signal.
+
+### Endpoints (admin-key gated)
+
+| Method | Path                              | Purpose                                    |
+| ------ | --------------------------------- | ------------------------------------------ |
+| POST   | `/api/sessions/{name}/start`      | Begin recording into session `name`        |
+| POST   | `/api/sessions/{name}/stop`       | Finalize → flush JSONL to disk             |
+| GET    | `/api/sessions`                   | List all sessions (in-memory + on-disk)    |
+| GET    | `/api/sessions/{name}`            | Metadata + by_path + by_status summary     |
+| GET    | `/api/sessions/{name}/entries`    | Full req+resp pairs (paginated; `?limit`, `?offset`) |
+| DELETE | `/api/sessions/{name}`            | Remove from memory + disk                  |
+| GET    | `/api/sessions/diff?a=X&b=Y`      | Structured diff of two sessions            |
+
+### Replay (no admin auth needed)
+
+Add `?replay_from=<session>` to any bound endpoint. siemulator looks
+up the first captured entry matching `(method, path, query without
+meta-params)` and returns the captured response **verbatim** —
+preserved bytes, original status, original headers. Useful for
+snapshot-pinning siemulator's own output so future code changes here
+don't break your consumer's test suite.
+
+```bash
+curl -i "https://your-siemulator/qradar/api/siem/offenses?replay_from=xsoar-v1"
+# Response headers include:
+#   X-Replay-Match: hit
+#   X-Replay-From: xsoar-v1
+#   X-Replay-Idx: 3
+```
+
+### Example — regression-test an XSOAR playbook upgrade
+
+```bash
+# Capture v1 behaviour
+curl -X POST -H "X-Admin-Key: $K" $URL/api/sessions/xsoar-v1/start
+xsoar-playbook-run --target $URL  # your CI step
+curl -X POST -H "X-Admin-Key: $K" $URL/api/sessions/xsoar-v1/stop
+
+# Upgrade XSOAR, capture v2
+curl -X POST -H "X-Admin-Key: $K" $URL/api/sessions/xsoar-v2/start
+xsoar-playbook-run --target $URL  # same step, new XSOAR version
+curl -X POST -H "X-Admin-Key: $K" $URL/api/sessions/xsoar-v2/stop
+
+# Diff: did v2 send different requests than v1?
+curl -fsS -H "X-Admin-Key: $K" \
+  "$URL/api/sessions/diff?a=xsoar-v1&b=xsoar-v2" | jq '.diffs'
+```
+
+A non-empty `diffs` array means the upgrade changed your consumer's
+request stream — investigate before promoting v2 to prod. Diff
+surfaces method/path/query/status changes per-entry and body delta
+(line + byte counts).
+
+### Storage
+
+Sessions persist as JSONL to `SIEMULATOR_SESSIONS_DIR` (default
+`./siemulator-sessions/`). Reload from disk on process restart. Mount
+a persistent volume in your container if you want sessions to survive
+redeploys.
+
+### Token redaction
+
+Headers (`Authorization`, `SEC`, `X-Admin-Key`, `Cookie`) and
+sensitive query params are recorded as `***` markers, never as
+values. Pinned regression confirms the literal secret strings never
+echo through the captured entries.
+
+### Knobs
+
+| Variable                       | Default                 | Purpose                                  |
+| ------------------------------ | ----------------------- | ---------------------------------------- |
+| `SIEMULATOR_SESSIONS_ENABLED`  | `true`                  | Disable middleware + admin endpoints     |
+| `SIEMULATOR_SESSIONS_DIR`      | `./siemulator-sessions` | JSONL persistence directory              |
+
 ## Access log
 
 Every request to `/logscale/*` and `/qradar/*` is captured into a
@@ -530,6 +619,9 @@ siemulator/
 ├── scenarios.py    # 22 multi-source attack narratives
 ├── ui.py           # Single-page web UI at / (inlined HTML/CSS/JS)
 ├── access_log.py   # Middleware + /api/access-log endpoints
+├── fault_inject.py # Chaos engineering — middleware + /api/faults
+├── sessions.py     # Record / replay / diff — middleware + /api/sessions
+├── splunk.py       # /splunk/* — Splunk REST search API
 └── __main__.py     # `python -m siemulator` entrypoint
 ```
 

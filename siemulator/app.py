@@ -10,6 +10,7 @@ from siemulator.config import (
     access_log_enabled,
     logscale_prefix,
     qradar_prefix,
+    sessions_enabled,
     splunk_prefix,
     ui_enabled,
 )
@@ -79,6 +80,17 @@ def create_app() -> FastAPI:
         bound_prefixes=bound_prefixes,
     )
     app.include_router(build_faults_router())
+
+    # Sessions — record / replay / diff. Middleware captures during
+    # active recording AND short-circuits requests with ?replay_from=
+    # to serve captured responses verbatim. Bound to the same prefixes
+    # as access_log + fault_inject; UI / docs / /api/* meta never see it.
+    if sessions_enabled():
+        from siemulator.sessions import SessionMiddleware
+        from siemulator.sessions import build_router as build_sessions_router
+
+        app.add_middleware(SessionMiddleware, bound_prefixes=bound_prefixes)
+        app.include_router(build_sessions_router(list(bound_prefixes)))
 
     if access_log_enabled():
         # Register middleware AFTER routers so it wraps every handled

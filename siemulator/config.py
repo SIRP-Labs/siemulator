@@ -115,3 +115,13 @@ def inject_latency_ms_default() -> int:
 def inject_malformed_pct_default() -> float:
     """Percentage (0-100) of JSON responses to truncate mid-body."""
     return _float_env("SIEMULATOR_INJECT_MALFORMED_PCT", "0")
+
+
+def sessions_enabled() -> bool:
+    """Record/replay/diff middleware + admin endpoints. Default on."""
+    return _bool_env("SIEMULATOR_SESSIONS_ENABLED", "true")
+
+
+def sessions_dir() -> str:
+    """Where session JSONL files persist. Default ``./siemulator-sessions``."""
+    return os.environ.get("SIEMULATOR_SESSIONS_DIR", "./siemulator-sessions")
