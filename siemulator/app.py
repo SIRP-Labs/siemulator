@@ -57,6 +57,24 @@ def create_app() -> FastAPI:
     app.include_router(build_logscale_router())
     app.include_router(build_qradar_router())
 
+    # Fault injection — middleware for malformed-JSON path, dependency
+    # already wired into both routers for status / latency injection.
+    # Always mount the admin router so /api/faults works regardless of
+    # whether env-defaults are enabled (per-request overrides + live
+    # admin updates work either way).
+    from siemulator.fault_inject import (
+        MalformedResponseMiddleware,
+    )
+    from siemulator.fault_inject import (
+        build_router as build_faults_router,
+    )
+
+    app.add_middleware(
+        MalformedResponseMiddleware,
+        bound_prefixes=(logscale_prefix(), qradar_prefix()),
+    )
+    app.include_router(build_faults_router())
+
     if access_log_enabled():
         # Register middleware AFTER routers so it wraps every handled
         # request, and register the admin router so /api/access-log[/*]

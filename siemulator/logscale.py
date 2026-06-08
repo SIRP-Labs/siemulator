@@ -27,9 +27,10 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from siemulator.config import MOCK_SOURCE, logscale_prefix, logscale_token, qradar_token
+from siemulator.fault_inject import fault_check
 from siemulator.templates import ALERT_TEMPLATES, HOSTNAMES, REPO_NAME, USERS
 
 
@@ -149,7 +150,11 @@ def _stamp(response: Response) -> None:
 
 
 def _make_router(prefix: str) -> APIRouter:
-    router = APIRouter(prefix=prefix, tags=["logscale-mock"])
+    router = APIRouter(
+        prefix=prefix,
+        tags=["logscale-mock"],
+        dependencies=[Depends(fault_check)],
+    )
 
     @router.get("/")
     @router.get("/api/v1/status")

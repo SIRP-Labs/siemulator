@@ -68,3 +68,42 @@ def access_log_skip_health() -> bool:
     (useful when DO Apps' 30-s health probe would otherwise dominate the
     ring). Default off — log everything for full visibility."""
     return _bool_env("SIEMULATOR_ACCESS_LOG_SKIP_HEALTH", "false")
+
+
+def _float_env(name: str, default: str) -> float:
+    try:
+        return max(0.0, min(100.0, float(os.environ.get(name, default))))
+    except ValueError:
+        return float(default)
+
+
+def _int_env(name: str, default: str) -> int:
+    try:
+        return max(0, int(os.environ.get(name, default)))
+    except ValueError:
+        return int(default)
+
+
+def fault_injection_enabled() -> bool:
+    """Master switch for the probabilistic env-default fault injection.
+    Per-request ``?inject_…`` overrides work regardless of this flag."""
+    return _bool_env("SIEMULATOR_INJECT_FAULTS", "false")
+
+
+def inject_5xx_pct_default() -> float:
+    """Percentage (0-100) of requests that should return a 5xx fault."""
+    return _float_env("SIEMULATOR_INJECT_5XX_PCT", "0")
+
+
+def inject_429_pct_default() -> float:
+    return _float_env("SIEMULATOR_INJECT_429_PCT", "0")
+
+
+def inject_latency_ms_default() -> int:
+    """Added latency in milliseconds, applied to every request."""
+    return _int_env("SIEMULATOR_INJECT_LATENCY_MS", "0")
+
+
+def inject_malformed_pct_default() -> float:
+    """Percentage (0-100) of JSON responses to truncate mid-body."""
+    return _float_env("SIEMULATOR_INJECT_MALFORMED_PCT", "0")

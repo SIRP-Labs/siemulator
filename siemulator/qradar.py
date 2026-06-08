@@ -40,9 +40,10 @@ import uuid
 from collections import deque
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from siemulator.config import MOCK_SOURCE, admin_key, logscale_token, qradar_prefix, qradar_token
+from siemulator.fault_inject import fault_check
 from siemulator.scenarios import all_scenarios_as_qradar
 from siemulator.templates import ALERT_TEMPLATES, HOSTNAMES, USERS
 
@@ -249,7 +250,11 @@ def _record_request(
 
 
 def _make_router(prefix: str) -> APIRouter:
-    router = APIRouter(prefix=prefix, tags=["qradar-mock"])
+    router = APIRouter(
+        prefix=prefix,
+        tags=["qradar-mock"],
+        dependencies=[Depends(fault_check)],
+    )
 
     @router.get("/")
     @router.get("/api/help")
