@@ -64,7 +64,7 @@ fails the moment your integration code starts negotiating shape
 
 - **Pin shape regressions in CI.** Every endpoint has a contract test —
   fork them as your integration's golden-shape pins.
-- **Replay 22 hand-crafted multi-source attack scenarios** (phishing →
+- **Replay 30 hand-crafted multi-source attack scenarios** (phishing →
   MFA fatigue → token theft → UEFI bootkit → insider exfil → 0-day SSTI
   → ProxyShell → Golden Ticket → BEC + 10 more). Each is tagged with a
   stable offence ID so dedup-by-ID works across replays — your SOAR
@@ -112,7 +112,7 @@ curl -H "Authorization: Bearer logscale-dev-token" \
 curl -H "SEC: qradar-dev-token" \
   "http://localhost:8080/qradar/api/siem/offenses"
 
-# All 22 multi-source attack scenarios
+# All 30 multi-source attack scenarios
 curl "http://localhost:8080/qradar/api/siem/scenarios?token=qradar-dev-token"
 ```
 
@@ -155,9 +155,9 @@ take any path.
 - An interactive **Try it** panel that runs requests against the same
   origin — pick endpoint, paste token, see formatted JSON + status +
   latency.
-- A **scenario browser** for the 22 multi-source attack narratives:
-  click S1/S2/.../TEST-J chips to expand each chain with per-alert
-  source labels and raw-alert JSON.
+- A **scenario browser** for the 30 multi-source attack narratives:
+  click S1/S2/.../TEST-J/DEMO-A chips to expand each chain with
+  per-alert source labels and raw-alert JSON.
 - A **detection templates** table with the 6 templates and their MITRE
   tactic + technique IDs.
 - A **debug-endpoint probe** under a collapsed `<details>` block
@@ -190,7 +190,7 @@ liveness probes that should never see HTML.
 | GET    | `/api/help` / `/api/help/capabilities`                  | —    | Health                                 |
 | GET    | `/api/siem/offenses[?scenarios=all\|batch\|replay\|mix]`| ✅   | Active offences + scenario modes       |
 | GET    | `/api/siem/offenses/{id}`                               | ✅   | Single offence (id echoed back)        |
-| GET    | `/api/siem/scenarios`                                   | ✅   | All 22 multi-source attack narratives  |
+| GET    | `/api/siem/scenarios`                                   | ✅   | All 30 multi-source attack narratives  |
 | GET    | `/api/siem/source_addresses`                            | ✅   | IP context (3 synthetic rows)          |
 | POST   | `/api/ariel/searches`                                   | ✅   | Submit (returns COMPLETED immediately) |
 | GET    | `/api/ariel/searches/{id}`                              | ✅   | Status                                 |
@@ -297,7 +297,7 @@ crashes — they're in `tests/test_qradar.py`):
   `POST /qradar/_debug/reset_scenarios` (admin-key gated).
 - **`batch`** — Rotate one scenario per call (round-robin through all
   22). Useful for slow-drip ingestion testing.
-- **`replay`** — All 22 scenarios in one response, ignoring the one-shot
+- **`replay`** — All 30 scenarios in one response, ignoring the one-shot
   dedup set. Useful for one-shot ad-hoc bulk ingestion tests.
 - **`mix`** — All scenarios + N synthetic templates (N from the `Range:
   items=0-N` header). Useful for testing how your consumer handles a
@@ -324,8 +324,8 @@ in `siemulator/templates.py` — add your own by appending to
 
 ### Multi-source attack scenarios
 
-Twenty-two hand-crafted offences spread across two batches, each tagged
-with a stable `offense_id` in `90011-90070` and a `_scenario_id` label.
+Thirty hand-crafted offences spread across three batches, each tagged
+with a stable `offense_id` in `90011-90088` and a `_scenario_id` label.
 Each offence carries a `_raw_alert` block preserving the original
 vendor-specific schema (Proofpoint TAP, Defender for Endpoint,
 CrowdStrike Falcon, Zscaler ZIA, Entra ID, Eclypsium, Purview, WAF,
@@ -359,6 +359,32 @@ where a single sophisticated event tells the whole story.
 | **TEST-H**     | 90068      | Medical infusion pump — drug-limit override 10×↑, patient at risk (CVE-2022-26390)        |
 | **TEST-I**     | 90069      | Deepfake vishing — AI-synthesised CEO voice + BEC multi-channel                           |
 | **TEST-J**     | 90070      | GPO abuse — domain-wide scheduled-task + persistence (T1484.001)                          |
+
+#### Batch 3 — synthetic-IOC fixtures (DEMO-A through DEMO-H, 8 offences)
+
+Mirrors the 8 demo3-tenant incidents from
+[sara-open#1083](https://github.com/SIRP-Labs/sara-open/issues/1083).
+Every IOC uses a deliberately synthetic pattern that public TI sources
+have no record of — **RFC 5737 TEST-NET IPs** (`198.51.100.x`,
+`192.0.2.x`, `203.0.113.x`), **NetBIOS-shape names** (REWTERZ /
+ACMECORP / `*.example.local`), **48-char placeholder hashes** (not
+valid SHA-256/SHA-1/MD5), and **fictional domains**
+(`update-check-cdn.net`, `acme-portal-secure.net`). Each IOC is
+annotated with a `pattern` tag (`rfc5737_testnet` / `fictional` /
+`placeholder_48char` / `netbios_internal` / `tor_exit_node`) so
+downstream enrichment-bypass code can pattern-match and short-circuit
+public-TI round-trips.
+
+| `_scenario_id` | offence ID | Category                              | Narrative                                                                       |
+| -------------- | ---------- | ------------------------------------- | ------------------------------------------------------------------------------- |
+| **DEMO-A**     | 90081      | 107 Malware                           | Admin-tool execution on managed-services workstation, 4 IOCs, expects `BENIGN_AUTHORIZED` roll-up |
+| **DEMO-B**     | 90082      | 108 Phishing → 123                    | Credential-harvest link, RFC 5737 sender IP, fictional brand-spoofed domain    |
+| **DEMO-C**     | 90083      | 110 Network Anomaly → 114 Cloud Sec   | Outbound TCP 443 to RFC 5737 destination + fictional domain                    |
+| **DEMO-D**     | 90084      | 107 Malware                           | HR-workstation unsigned binary, placeholder hash + NetBIOS user identifier     |
+| **DEMO-E**     | 90085      | 114 Cloud Security → 111              | AWS IAM `AttachUserPolicy` privilege-escalation from RFC 5737 source IP        |
+| **DEMO-F**     | 90086      | 107 Malware                           | EDR-quarantined binary, synthetic-hash-only IOC                                |
+| **DEMO-G**     | 90087      | 107 Malware                           | ACMECORP service account running ad-hoc PowerShell AD-recon (NetBIOS-only IOC) |
+| **DEMO-H**     | 90088      | 108 Phishing                          | Sender IP is a **real Tor exit node** — the only IOC in the corpus that public TI consistently identifies (see sara-open #1078) |
 
 The full scenario corpus lives in `siemulator/scenarios.py` — JSON-defined
 payloads parsed once at import. Add your own by extending the registry
@@ -616,7 +642,7 @@ siemulator/
 ├── logscale.py     # /logscale/* — Humio REST shape
 ├── qradar.py       # /qradar/* — QRadar offences + Ariel
 ├── templates.py    # 6 detection templates + HOSTNAMES + USERS pool
-├── scenarios.py    # 22 multi-source attack narratives
+├── scenarios.py    # 30 multi-source attack narratives
 ├── ui.py           # Single-page web UI at / (inlined HTML/CSS/JS)
 ├── access_log.py   # Middleware + /api/access-log endpoints
 ├── fault_inject.py # Chaos engineering — middleware + /api/faults

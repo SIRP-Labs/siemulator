@@ -610,6 +610,193 @@ _TJ = _j(r"""
 """)
 
 
+# ── v3 DEMO payloads (2026-06-09) — synthetic-IOC fixtures ────────
+#
+# Issue: https://github.com/SIRP-Labs/sara-open/issues/1083
+#
+# These 8 scenarios mirror the 8 demo3 incidents observed in the
+# 2026-06-09 enrichment deep-dive. Every IOC uses a deliberately
+# synthetic pattern that public TI sources have no record of:
+#
+#   • RFC 5737 TEST-NET IPs:   198.51.100.x / 192.0.2.x / 203.0.113.x
+#   • NetBIOS-shape names:     REWTERZ / ACMECORP / *.example.local
+#   • 48-char placeholder hashes (NOT valid SHA-256/SHA-1/MD5)
+#   • Fictional domains:       update-check-cdn.net, etc.
+#
+# Purpose: provide a deterministic test fixture for downstream
+# enrichment-bypass / synthetic-IOC-detector work (#1083 proposal a).
+# A consumer running these scenarios should NOT hit public TI APIs —
+# pattern-match on the synthetic-IOC shape and short-circuit.
+#
+# Categories covered (matching demo3 source distribution):
+#   107 Malware · 108 Phishing · 110 Network Anomaly · 111 Cloud
+#   Security · 114 Cloud Security · 123 (Phishing escalation)
+
+_DEMO_A = _j(r"""
+{
+  "source": "QRadar", "event_type": "MalwareDetection",
+  "timestamp": "2026-06-09T08:14:22Z", "severity": "Medium", "confidence": 50,
+  "category": "107 Malware",
+  "alert": {"name": "Suspected PUP / admin-tool execution",
+            "description": "Sysmon flagged admin-tool launch on managed-services workstation. 4 IOCs observed; verdict pending enrichment."},
+  "host": {"hostname": "WIN-DESKTOP-01.example.local", "domain": "REWTERZ",
+           "ip": "198.51.100.77",
+           "note": "RFC 5737 TEST-NET-2 IP — reserved for documentation; not internet-routable."},
+  "process": {"name": "psexec.exe", "user": "REWTERZ\\admin.svc",
+              "sha256": "d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2",
+              "note": "48-char placeholder hash — NOT a valid SHA-256 (would be 64 chars). Synthetic fixture only."},
+  "iocs": [
+    {"type": "ip", "value": "198.51.100.77", "pattern": "rfc5737_testnet"},
+    {"type": "domain", "value": "update-check-cdn.net", "pattern": "fictional"},
+    {"type": "hash_synthetic", "value": "d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "pattern": "placeholder_48char"},
+    {"type": "user", "value": "REWTERZ\\admin.svc", "pattern": "netbios_internal"}
+  ],
+  "expected_verdict": "BENIGN_AUTHORIZED",
+  "note": "Admin tools on managed-services workstations are sanctioned. Roll-up to BENIGN_AUTHORIZED if all IOCs synthetic-pattern + actor in admin role."
+}
+""")
+
+_DEMO_B = _j(r"""
+{
+  "source": "QRadar", "event_type": "PhishingEmail",
+  "timestamp": "2026-06-09T09:42:11Z", "severity": "Medium", "confidence": 55,
+  "category": "108 Phishing → escalates to 123",
+  "alert": {"name": "Phishing email — credential-harvest link",
+            "description": "Inbound email with credential-harvest link reported by recipient. Sender IP synthetic."},
+  "message": {"from": "billing-update@acme-portal-secure.net",
+              "to": ["finance.team@example.local"],
+              "subject": "Action Required: Invoice #ACM-2026-4419",
+              "sender_ip": "192.0.2.45",
+              "url": "https://acme-portal-secure.net/login?id=4419"},
+  "iocs": [
+    {"type": "ip", "value": "192.0.2.45", "pattern": "rfc5737_testnet"},
+    {"type": "domain", "value": "acme-portal-secure.net", "pattern": "fictional"}
+  ],
+  "expected_verdict": "VERIFICATION_REQUIRED",
+  "note": "Phishing pattern is real-shape, but IOCs are synthetic. Escalation 108→123 if user clicks (treat as credential-compromise)."
+}
+""")
+
+_DEMO_C = _j(r"""
+{
+  "source": "QRadar", "event_type": "NetworkAnomaly",
+  "timestamp": "2026-06-09T10:18:33Z", "severity": "High", "confidence": 60,
+  "category": "110 Network Anomaly → escalates to 114 Cloud Security",
+  "alert": {"name": "Unexpected outbound to non-corporate destination",
+            "description": "Outbound TCP 443 to undocumented external host from finance subnet. 2 IOCs."},
+  "flow": {"source_ip": "10.42.83.12", "source_host": "FIN-LAPTOP-22.example.local",
+           "destination_ip": "203.0.113.222", "destination_port": 443,
+           "destination_domain": "update-check-cdn.net",
+           "bytes_sent": 84312, "bytes_received": 12408,
+           "duration_seconds": 47},
+  "iocs": [
+    {"type": "ip", "value": "203.0.113.222", "pattern": "rfc5737_testnet"},
+    {"type": "domain", "value": "update-check-cdn.net", "pattern": "fictional"}
+  ],
+  "expected_verdict": "SUSPICIOUS",
+  "note": "Cloud-egress shape is real, IOCs synthetic. Escalation 110→114 if pattern repeats over multiple hosts."
+}
+""")
+
+_DEMO_D = _j(r"""
+{
+  "source": "QRadar", "event_type": "MalwareDetection",
+  "timestamp": "2026-06-09T11:03:55Z", "severity": "High", "confidence": 65,
+  "category": "107 Malware",
+  "alert": {"name": "Suspicious binary on HR workstation",
+            "description": "Unsigned binary executed under HR intern session. 2 IOCs."},
+  "host": {"hostname": "HR-WORKSTATION-09.example.local", "domain": "REWTERZ",
+           "ip": "10.20.40.55"},
+  "process": {"name": "invoice_viewer.exe", "user": "REWTERZ\\hr.intern",
+              "sha256": "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4",
+              "note": "48-char placeholder hash"},
+  "iocs": [
+    {"type": "hash_synthetic", "value": "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4", "pattern": "placeholder_48char"},
+    {"type": "user", "value": "REWTERZ\\hr.intern", "pattern": "netbios_internal"}
+  ],
+  "expected_verdict": "VERIFICATION_REQUIRED"
+}
+""")
+
+_DEMO_E = _j(r"""
+{
+  "source": "QRadar", "event_type": "CloudControlPlaneActivity",
+  "timestamp": "2026-06-09T12:21:08Z", "severity": "High", "confidence": 70,
+  "category": "114 Cloud Security → escalates to 111",
+  "alert": {"name": "IAM policy modification from unmanaged IP",
+            "description": "AWS IAM AttachUserPolicy event from an IP outside the documented admin range."},
+  "cloud_event": {"provider": "AWS", "service": "iam",
+                  "action": "AttachUserPolicy",
+                  "actor_arn": "arn:aws:iam::123456789012:user/devops.bot",
+                  "source_ip": "192.0.2.198",
+                  "user_agent": "aws-cli/2.13.4 Python/3.11.4",
+                  "policy_attached": "AdministratorAccess",
+                  "target_user": "arn:aws:iam::123456789012:user/temp.contractor"},
+  "iocs": [
+    {"type": "ip", "value": "192.0.2.198", "pattern": "rfc5737_testnet"}
+  ],
+  "expected_verdict": "SUSPICIOUS",
+  "note": "Privilege-escalation shape is real (AttachUserPolicy → AdministratorAccess → contractor account), source IP synthetic. 114→111 if target user becomes active."
+}
+""")
+
+_DEMO_F = _j(r"""
+{
+  "source": "QRadar", "event_type": "MalwareDetection",
+  "timestamp": "2026-06-09T13:47:19Z", "severity": "Medium", "confidence": 45,
+  "category": "107 Malware",
+  "alert": {"name": "Quarantined binary — synthetic hash",
+            "description": "EDR quarantined a binary based on heuristic; hash has no reputation."},
+  "host": {"hostname": "DEV-BUILD-03.example.local", "ip": "10.30.55.77"},
+  "process": {"name": "build_helper.exe",
+              "sha256": "a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2",
+              "note": "48-char placeholder hash"},
+  "iocs": [
+    {"type": "hash_synthetic", "value": "a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2", "pattern": "placeholder_48char"}
+  ],
+  "expected_verdict": "VERIFICATION_REQUIRED"
+}
+""")
+
+_DEMO_G = _j(r"""
+{
+  "source": "QRadar", "event_type": "MalwareDetection",
+  "timestamp": "2026-06-09T14:12:44Z", "severity": "Medium", "confidence": 50,
+  "category": "107 Malware",
+  "alert": {"name": "Service account ran ad-hoc PowerShell",
+            "description": "Service account ACMECORP\\service.acc invoked PowerShell outside its scheduled-task window."},
+  "host": {"hostname": "DC-PRIMARY.example.local", "domain": "ACMECORP"},
+  "process": {"name": "powershell.exe", "user": "ACMECORP\\service.acc",
+              "command_line": "powershell.exe -ep bypass -nop -c Get-ADUser -Filter *"},
+  "iocs": [
+    {"type": "user", "value": "ACMECORP\\service.acc", "pattern": "netbios_internal"}
+  ],
+  "expected_verdict": "SUSPICIOUS",
+  "note": "Behaviour signal is real (service acct doing AD recon), actor identifier is NetBIOS-internal so no external TI hit."
+}
+""")
+
+_DEMO_H = _j(r"""
+{
+  "source": "QRadar", "event_type": "PhishingEmail",
+  "timestamp": "2026-06-09T15:30:01Z", "severity": "Medium", "confidence": 55,
+  "category": "108 Phishing",
+  "alert": {"name": "Phishing — sender IP is Tor exit node",
+            "description": "Phishing email arrived from a Tor exit node. Only IOC is the Tor IP (the one TI source that ever cites this in demo3)."},
+  "message": {"from": "noreply@acme-corp-billing.example",
+              "to": ["accounts.payable@example.local"],
+              "subject": "Final notice — payment overdue",
+              "sender_ip": "185.220.101.34",
+              "note": "185.220.101.x is a real Tor-exit /24. The ONLY enrichment hit demo3 currently sees (TorProject)."},
+  "iocs": [
+    {"type": "ip", "value": "185.220.101.34", "pattern": "tor_exit_node",
+     "note": "Real Tor exit IP — only IOC in the demo corpus that public TI consistently identifies. See sara-open #1078 for the cross-attribution issue this IOC triggers."}
+  ],
+  "expected_verdict": "SUSPICIOUS"
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -638,6 +825,16 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 52, "S5", "2/4 Zero-Day Chain — WAF-bypassed SSTI success", _S5_A2),
     (SCENARIO_ID_BASE + 53, "S5", "3/4 Zero-Day Chain — webshell + XMRig + crontab persist", _S5_A3),
     (SCENARIO_ID_BASE + 54, "S5", "4/4 Zero-Day Chain — CloudWatch CPU spike + $847/day cost", _S5_A4),
+    # v3 DEMO payloads (2026-06-09) — synthetic-IOC fixtures mirroring
+    # the 8 demo3 incidents from sara-open#1083. Offence IDs 90081-90088.
+    (SCENARIO_ID_BASE + 81, "DEMO-A", "107 Malware — admin-tool/4 IOCs/BENIGN_AUTHORIZED (synthetic-IOC fixture)", _DEMO_A),
+    (SCENARIO_ID_BASE + 82, "DEMO-B", "108 Phishing→123 — credential-harvest link, RFC5737 sender IP", _DEMO_B),
+    (SCENARIO_ID_BASE + 83, "DEMO-C", "110 Network Anomaly→114 — outbound to RFC5737 + fictional domain", _DEMO_C),
+    (SCENARIO_ID_BASE + 84, "DEMO-D", "107 Malware — HR workstation, placeholder hash + NetBIOS user", _DEMO_D),
+    (SCENARIO_ID_BASE + 85, "DEMO-E", "114 Cloud Security→111 — AWS IAM AttachUserPolicy from RFC5737 IP", _DEMO_E),
+    (SCENARIO_ID_BASE + 86, "DEMO-F", "107 Malware — quarantined binary, synthetic hash only", _DEMO_F),
+    (SCENARIO_ID_BASE + 87, "DEMO-G", "107 Malware — ACMECORP service acct ad-hoc PowerShell (NetBIOS-only IOC)", _DEMO_G),
+    (SCENARIO_ID_BASE + 88, "DEMO-H", "108 Phishing — sender IP is real Tor exit (only TI hit in demo corpus)", _DEMO_H),
 ]
 
 
