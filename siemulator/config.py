@@ -34,3 +34,11 @@ def host() -> str:
 
 def port() -> int:
     return int(os.environ.get("SIEMULATOR_PORT", "8080"))
+
+
+def ui_enabled() -> bool:
+    """Web UI at /. Default on. Set ``SIEMULATOR_UI_ENABLED=false`` (or
+    ``0`` / ``no``) for production deployments that want pure-API
+    behaviour — root falls back to JSON metadata."""
+    val = os.environ.get("SIEMULATOR_UI_ENABLED", "true").strip().lower()
+    return val not in ("false", "0", "no", "off", "")

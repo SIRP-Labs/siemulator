@@ -17,6 +17,10 @@ test harness, or an agent-chain integration test at when you want a
 stable, reproducible stream of realistic alerts without standing up
 real SIEMs or touching customer telemetry.
 
+A small **web UI** at `/` lets humans browse the scenarios, run
+endpoints interactively, and copy curl snippets — try the live demo at
+**https://siemulator-y7uhf.ondigitalocean.app**.
+
 **Status:** v0.1.0 · MIT-licensed · Python 3.10+ · Docker (amd64 + arm64).
 
 ---
@@ -26,6 +30,7 @@ real SIEMs or touching customer telemetry.
 - [Why](#why)
 - [Quickstart](#quickstart)
 - [Configuration](#configuration)
+- [Web UI](#web-ui)
 - [Endpoints](#endpoints)
 - [Response shape — quick reference](#response-shape--quick-reference)
 - [Scenario modes](#scenario-modes)
@@ -121,6 +126,7 @@ All via env vars. Defaults work for local testing — override in production.
 | `SIEMULATOR_QRADAR_PREFIX`     | `/qradar`              | URL prefix override                                    |
 | `SIEMULATOR_HOST`              | `0.0.0.0`              | Bind host                                              |
 | `SIEMULATOR_PORT`              | `8080`                 | Bind port                                              |
+| `SIEMULATOR_UI_ENABLED`        | `true`                 | Web UI at `/`. Set `false` for pure-API mode           |
 
 See [`.env.example`](.env.example).
 
@@ -130,6 +136,31 @@ change the consumer-side config. Setting
 `SIEMULATOR_LOGSCALE_PREFIX=/api/v1/falcon-logscale` and
 `SIEMULATOR_QRADAR_PREFIX=/siem-mock` is supported — both prefixes can
 take any path.
+
+## Web UI
+
+`GET /` serves a single-page UI when `SIEMULATOR_UI_ENABLED=true`
+(the default). It's a zero-dependency dark-themed page with:
+
+- Hero + quickstart with copy-able curl snippets (auto-populated with
+  whatever token you paste in the form).
+- An interactive **Try it** panel that runs requests against the same
+  origin — pick endpoint, paste token, see formatted JSON + status +
+  latency.
+- A **scenario browser** for the 22 multi-source attack narratives:
+  click S1/S2/.../TEST-J chips to expand each chain with per-alert
+  source labels and raw-alert JSON.
+- A **detection templates** table with the 6 templates and their MITRE
+  tactic + technique IDs.
+- A **debug-endpoint probe** under a collapsed `<details>` block
+  (paste `X-Admin-Key`, hit the gated endpoints).
+
+For pure-API deployments, set `SIEMULATOR_UI_ENABLED=false` — `/` then
+returns the same JSON metadata as `/api/info` (the always-JSON
+machine-readable endpoint).
+
+`/api/info` is always JSON regardless of UI state — use it for
+liveness probes that should never see HTML.
 
 ## Endpoints
 
@@ -421,12 +452,13 @@ real SIEM. The `siemulator` string is stable across versions.
 
 ```
 siemulator/
-├── app.py          # FastAPI factory — mounts both routers
+├── app.py          # FastAPI factory — mounts UI + both API routers
 ├── config.py       # All env var reads (one function per var; no caching)
 ├── logscale.py     # /logscale/* — Humio REST shape
 ├── qradar.py       # /qradar/* — QRadar offences + Ariel
 ├── templates.py    # 6 detection templates + HOSTNAMES + USERS pool
 ├── scenarios.py    # 22 multi-source attack narratives
+├── ui.py           # Single-page web UI at / (inlined HTML/CSS/JS)
 └── __main__.py     # `python -m siemulator` entrypoint
 ```
 

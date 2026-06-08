@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from siemulator import __version__
-from siemulator.config import MOCK_SOURCE
+from siemulator.config import MOCK_SOURCE, ui_enabled
 from siemulator.logscale import build_router as build_logscale_router
 from siemulator.qradar import build_router as build_qradar_router
 
@@ -21,15 +21,32 @@ def create_app() -> FastAPI:
         ),
     )
 
-    @app.get("/")
-    async def root():
-        return {
-            "name": "siemulator",
-            "version": __version__,
-            "x-mock-source": MOCK_SOURCE,
-            "surfaces": ["logscale", "qradar"],
-            "docs": "/docs",
-        }
+    _METADATA = {
+        "name": "siemulator",
+        "version": __version__,
+        "x-mock-source": MOCK_SOURCE,
+        "surfaces": ["logscale", "qradar"],
+        "docs": "/docs",
+    }
+
+    # JSON metadata always lives at /api/info — machine-readable, stable,
+    # never returns HTML. Useful for liveness probes that don't want
+    # content negotiation surprises.
+    @app.get("/api/info")
+    async def api_info():
+        return _METADATA
+
+    if ui_enabled():
+        # Web UI at /. Mounts a router rather than defining the route
+        # inline so the rendered HTML can capture the current prefixes.
+        from siemulator.ui import build_router as build_ui_router
+
+        app.include_router(build_ui_router())
+    else:
+        # Pure-API mode — / returns the same JSON metadata as /api/info.
+        @app.get("/")
+        async def root():
+            return _METADATA
 
     app.include_router(build_logscale_router())
     app.include_router(build_qradar_router())
