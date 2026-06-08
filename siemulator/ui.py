@@ -345,7 +345,7 @@ _HTML_TEMPLATE = """<!doctype html>
   <p>QRadar offences (5 synthetic):</p>
   <pre class="code"><button class="copy" onclick="copyCode(this)">copy</button><span id="curl-qr"></span></pre>
 
-  <p>All 30 multi-source attack scenarios at once:</p>
+  <p>All 33 multi-source attack scenarios at once:</p>
   <pre class="code"><button class="copy" onclick="copyCode(this)">copy</button><span id="curl-sc"></span></pre>
 
   <p>Splunk oneshot search:</p>
@@ -494,7 +494,7 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
     <li><span class="method get">GET</span><span class="path">{qr}/api/help</span><span class="note">health (no auth)</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/offenses</span><span class="note">?scenarios=all|batch|replay|mix</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/offenses/{{id}}</span></li>
-    <li><span class="method get">GET</span><span class="path">{qr}/api/siem/scenarios</span><span class="note">all 30 narratives</span></li>
+    <li><span class="method get">GET</span><span class="path">{qr}/api/siem/scenarios</span><span class="note">all 33 narratives</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/source_addresses</span></li>
     <li><span class="method post">POST</span><span class="path">{qr}/api/ariel/searches</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}</span></li>
@@ -773,7 +773,7 @@ function renderScenarioChips() {{
     const id = s._scenario_id || "?";
     (groups[id] = groups[id] || []).push(s);
   }}
-  const order = ["S1", "S2", "S3", "S4", "S5", "TEST-A", "TEST-B", "TEST-C", "TEST-D", "TEST-E", "TEST-F", "TEST-G", "TEST-H", "TEST-I", "TEST-J", "DEMO-A", "DEMO-B", "DEMO-C", "DEMO-D", "DEMO-E", "DEMO-F", "DEMO-G", "DEMO-H"];
+  const order = ["S1", "S2", "S3", "S4", "S5", "TEST-A", "TEST-B", "TEST-C", "TEST-D", "TEST-E", "TEST-F", "TEST-G", "TEST-H", "TEST-I", "TEST-J", "DEMO-A", "DEMO-B", "DEMO-C", "DEMO-D", "DEMO-E", "DEMO-F", "DEMO-G", "DEMO-H", "HASHIR-A", "HASHIR-B", "HASHIR-C"];
   const chips = order.filter(id => groups[id]).map(id => {{
     const count = groups[id].length;
     return `<span class="chip" onclick="selectScenario('${{id}}')"><span class="id">${{id}}</span>${{count > 1 ? count + " alerts" : "1 offence"}}</span>`;

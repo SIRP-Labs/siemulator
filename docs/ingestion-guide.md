@@ -59,16 +59,16 @@ schedule.
 
 | You want to test | Use surface | Why |
 |---|---|---|
-| QRadar offence ingestion (most SOARs) | `/qradar/*` | Native shape; consumers don't need custom mapping. 30 multi-source scenarios available with stable IDs for dedup. |
+| QRadar offence ingestion (most SOARs) | `/qradar/*` | Native shape; consumers don't need custom mapping. 33 multi-source scenarios available with stable IDs for dedup. |
 | Humio / Falcon LogScale push integrations | `/logscale/*` | Mirrors Humio REST exactly — `@timestamp`, `@id`, `@rawstring`, `#repo` envelope. |
 | Detection content (templates) — alert-shape testing | Either | Both surfaces draw from the same 6-template pool; pick the shape your downstream consumer expects. |
-| Multi-source attack-narrative testing (5-alert chains across multiple vendors) | `/qradar/*` with `?scenarios=…` | Only the QRadar surface exposes the 30 scenario library. Each scenario tags `_scenario_id` + `_raw_alert` so your SOAR can correlate by chain. |
+| Multi-source attack-narrative testing (5-alert chains across multiple vendors) | `/qradar/*` with `?scenarios=…` | Only the QRadar surface exposes the 33 scenario library. Each scenario tags `_scenario_id` + `_raw_alert` so your SOAR can correlate by chain. |
 | Search-API testing (`/queryjobs`, Ariel) | Both | LogScale `queryjobs` POST→poll matches Humio; QRadar Ariel matches the IBM async-search shape. |
 | Range-paginated ingestion (`Range: items=N-M`) | `/qradar/*` | QRadar canonical pagination header. LogScale uses `?limit=N` query param instead. |
 
 Most SOAR integrations want `/qradar/*` because (a) QRadar's
 offence shape is what most SOAR-vendor connectors are already built
-against, and (b) the 30 multi-source scenarios let you test correlation
+against, and (b) the 33 multi-source scenarios let you test correlation
 logic, not just shape parsing.
 
 ## Authentication patterns
@@ -106,9 +106,9 @@ siemulator provides four modes via `?scenarios=…` on
 | Mode | Behaviour | When to use |
 |---|---|---|
 | _(default — no `?scenarios=`)_ | Returns N synthetic offences from the 6-template pool. Random IDs, random content per call. | Shape-only soak testing; load-style polling where you want a constant trickle. |
-| `?scenarios=all` | **One-shot dedup.** Returns scenarios with offence IDs your process hasn't served yet. Each ID emitted once per process lifetime. Subsequent polls return `[]` until reset. | **Default for SOAR ingestion testing.** A cron poll every 60s drains the 30 scenarios over ~30 polls, then quiesces. Your SOAR sees 30 distinct incidents, not the same one re-ingested 30 times. |
+| `?scenarios=all` | **One-shot dedup.** Returns scenarios with offence IDs your process hasn't served yet. Each ID emitted once per process lifetime. Subsequent polls return `[]` until reset. | **Default for SOAR ingestion testing.** A cron poll every 60s drains the 33 scenarios over ~33 polls, then quiesces. Your SOAR sees 33 distinct incidents, not the same one re-ingested 33 times. |
 | `?scenarios=batch` | Round-robin — one scenario per call, rotating through the pool. | Slow-drip ingestion where you want a steady stream of fresh content. |
-| `?scenarios=replay` | All 30 scenarios in one response, every call. | Bulk-load tests; one-shot end-to-end runs. |
+| `?scenarios=replay` | All 33 scenarios in one response, every call. | Bulk-load tests; one-shot end-to-end runs. |
 | `?scenarios=mix` | All scenarios + N synthetic templates from `Range: items=0-N`. | Mixed-pool stress testing. |
 
 If you choose `?scenarios=all` and want to replay the pool (e.g. after
@@ -259,7 +259,7 @@ def fetch_incidents():
 fetch_incidents()
 ```
 
-The one-shot `?scenarios=all` mode means after 30 polls the pool
+The one-shot `?scenarios=all` mode means after 33 polls the pool
 drains and `fetch_incidents` stops creating incidents until you reset
 the served-set via `/qradar/_debug/reset_scenarios`. Useful — your CI
 test sees exactly 22 incidents, then quiesces.
@@ -434,7 +434,7 @@ if __name__ == "__main__":
     poll(sys.argv[1], sys.argv[2])
 ```
 
-After 30 polls (~30 minutes), the pool drains; call
+After 33 polls (~33 minutes), the pool drains; call
 `/qradar/_debug/reset_scenarios` with the admin key if you want to
 replay the whole library.
 

@@ -797,6 +797,193 @@ _DEMO_H = _j(r"""
 """)
 
 
+# ── v4 HASHIR payloads (2026-06-09) — authorized-pentest recon chain ──
+#
+# Three sibling alerts from the same actor (HASHIR-VAPT-KHI) and same
+# source IP (10.50.5.42) targeting three different production hosts
+# over ~20 minutes. Designed to:
+#
+#   • Drive Entity Agent (sara-open Q1 actor lookup) — every alert
+#     carries actor.username = HASHIR-VAPT-KHI + iocs[].type = "user"
+#   • Give related_incidents a same_source_ip + same_user clustering
+#     anchor so the disposition recommender can roll all three into
+#     a single "authorized pentest" verdict
+#   • Each independently looks like genuine recon (SEV3, borderline
+#     s3_score 50-60, VERIFICATION_REQUIRED expected verdict) so
+#     the auto-close decision matters
+#
+# qradar_categories override on each → ingestion sees "Port Scan" /
+# "Network Reconnaissance" / "Suspicious Network Activity" instead of
+# the generic "Sophisticated-Test" label.
+
+_HASHIR_A = _j(r"""
+{
+  "source": "QRadar",
+  "event_type": "NetworkReconnaissance",
+  "timestamp": "2026-06-09T14:02:18Z",
+  "severity": "Medium",
+  "confidence": 55,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Port Scan", "Network Reconnaissance"],
+  "alert": {
+    "name": "Network reconnaissance from internal host",
+    "description": "Sustained TCP SYN scan from internal host targeting database tier ports (22, 80, 443, 1433, 3389) on WIN-PROD-DB-01. 12 src→dst flows in 90s."
+  },
+  "actor": {
+    "username": "HASHIR-VAPT-KHI",
+    "display_name": "Hashir (VAPT Karachi)",
+    "source_ip": "10.50.5.42",
+    "source_hostname": "VAPT-KHI-WS-04",
+    "note": "Account part of the authorized internal pentest team. No formal change window logged for this date — Entity Agent should resolve."
+  },
+  "process": {
+    "name": "nmap.exe",
+    "command_line": "nmap.exe -sS -T4 -p 22,80,443,1433,3389 10.10.20.30",
+    "parent": "powershell.exe"
+  },
+  "target": {
+    "hostname": "WIN-PROD-DB-01",
+    "ip": "10.10.20.30",
+    "role": "Production SQL Server",
+    "criticality": "high"
+  },
+  "scan_details": {
+    "scan_type": "TCP SYN",
+    "ports_scanned": [22, 80, 443, 1433, 3389],
+    "open_ports_observed": [1433, 3389],
+    "duration_seconds": 90,
+    "flow_count": 12
+  },
+  "iocs": [
+    {"type": "source_ip", "value": "10.50.5.42", "pattern": "internal_corp_source"},
+    {"type": "destination_ip", "value": "10.10.20.30", "pattern": "internal_corp_dest"},
+    {"type": "user", "value": "HASHIR-VAPT-KHI", "pattern": "authorized_pentest_actor"},
+    {"type": "process", "value": "nmap.exe", "pattern": "recon_tool"}
+  ],
+  "compromised_asset": "WIN-PROD-DB-01",
+  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:HASHIR-VAPT-KHI"],
+  "expected_verdict": "VERIFICATION_REQUIRED",
+  "expected_disposition": "true_positive_benign_authorized",
+  "expected_s3_score_range": [50, 60],
+  "expected_severity": "SEV3",
+  "note": "Alert 1 of 3 — recon chain from VAPT KHI internal pentest team. Without context: looks like internal recon. With Entity Agent + related_incidents context: authorized VAPT activity, auto-close to true_positive_benign_authorized recommended."
+}
+""")
+
+_HASHIR_B = _j(r"""
+{
+  "source": "QRadar",
+  "event_type": "NetworkReconnaissance",
+  "timestamp": "2026-06-09T14:11:44Z",
+  "severity": "Medium",
+  "confidence": 58,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Reconnaissance", "Suspicious Network Activity"],
+  "alert": {
+    "name": "Network reconnaissance from internal host",
+    "description": "Service-version enumeration (nmap -sV) from same internal source observed in incident 9 minutes earlier. New target: WIN-PROD-APP-01. Targets app-server ports (80, 443, 8080, 8443, 5985)."
+  },
+  "actor": {
+    "username": "HASHIR-VAPT-KHI",
+    "display_name": "Hashir (VAPT Karachi)",
+    "source_ip": "10.50.5.42",
+    "source_hostname": "VAPT-KHI-WS-04",
+    "note": "Same actor + source as alert 1 (HASHIR-A). related_incidents should cluster these on same_source_ip + same_user."
+  },
+  "process": {
+    "name": "nmap.exe",
+    "command_line": "nmap.exe -sV -T4 -p 80,443,8080,8443,5985 10.10.20.31",
+    "parent": "powershell.exe"
+  },
+  "target": {
+    "hostname": "WIN-PROD-APP-01",
+    "ip": "10.10.20.31",
+    "role": "Production application server (.NET / IIS)",
+    "criticality": "high"
+  },
+  "scan_details": {
+    "scan_type": "Service version detection (-sV)",
+    "ports_scanned": [80, 443, 8080, 8443, 5985],
+    "services_identified": [
+      {"port": 80, "service": "Microsoft IIS 10.0"},
+      {"port": 443, "service": "Microsoft IIS 10.0 (TLS 1.2)"},
+      {"port": 5985, "service": "WinRM HTTP"}
+    ],
+    "duration_seconds": 124,
+    "flow_count": 18
+  },
+  "iocs": [
+    {"type": "source_ip", "value": "10.50.5.42", "pattern": "internal_corp_source"},
+    {"type": "destination_ip", "value": "10.10.20.31", "pattern": "internal_corp_dest"},
+    {"type": "user", "value": "HASHIR-VAPT-KHI", "pattern": "authorized_pentest_actor"},
+    {"type": "process", "value": "nmap.exe", "pattern": "recon_tool"}
+  ],
+  "compromised_asset": "WIN-PROD-APP-01",
+  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:HASHIR-VAPT-KHI"],
+  "expected_verdict": "VERIFICATION_REQUIRED",
+  "expected_disposition": "true_positive_benign_authorized",
+  "expected_s3_score_range": [50, 60],
+  "expected_severity": "SEV3",
+  "note": "Alert 2 of 3 — same actor, same source IP, different target. By this point related_incidents should be returning HASHIR-A as a same_source_ip match; Entity Agent should cache the actor profile."
+}
+""")
+
+_HASHIR_C = _j(r"""
+{
+  "source": "QRadar",
+  "event_type": "NetworkReconnaissance",
+  "timestamp": "2026-06-09T14:22:07Z",
+  "severity": "Medium",
+  "confidence": 60,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Reconnaissance", "Port Scan"],
+  "alert": {
+    "name": "Network reconnaissance from internal host",
+    "description": "Vulnerability-script scan (nmap --script vuln) from same internal source observed in incidents 20 + 10 minutes earlier. New target: WIN-PROD-WEB-01. Active probing of known web-server CVEs."
+  },
+  "actor": {
+    "username": "HASHIR-VAPT-KHI",
+    "display_name": "Hashir (VAPT Karachi)",
+    "source_ip": "10.50.5.42",
+    "source_hostname": "VAPT-KHI-WS-04",
+    "note": "Same actor + source as alerts 1 (HASHIR-A) and 2 (HASHIR-B). related_incidents should now have 2 prior matches with same_source_ip + same_user — strong signal for authorized-pentest verdict."
+  },
+  "process": {
+    "name": "nmap.exe",
+    "command_line": "nmap.exe --script vuln -p 80,443 10.10.20.32",
+    "parent": "powershell.exe"
+  },
+  "target": {
+    "hostname": "WIN-PROD-WEB-01",
+    "ip": "10.10.20.32",
+    "role": "Production public-facing web server",
+    "criticality": "critical"
+  },
+  "scan_details": {
+    "scan_type": "Vulnerability scripts (--script vuln)",
+    "ports_scanned": [80, 443],
+    "scripts_run": ["http-vuln-cve2017-5638", "http-shellshock", "ssl-heartbleed", "http-vuln-cve2017-1001000"],
+    "vulnerabilities_flagged": 0,
+    "duration_seconds": 412,
+    "flow_count": 47
+  },
+  "iocs": [
+    {"type": "source_ip", "value": "10.50.5.42", "pattern": "internal_corp_source"},
+    {"type": "destination_ip", "value": "10.10.20.32", "pattern": "internal_corp_dest"},
+    {"type": "user", "value": "HASHIR-VAPT-KHI", "pattern": "authorized_pentest_actor"},
+    {"type": "process", "value": "nmap.exe", "pattern": "recon_tool"}
+  ],
+  "compromised_asset": "WIN-PROD-WEB-01",
+  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:HASHIR-VAPT-KHI"],
+  "expected_verdict": "VERIFICATION_REQUIRED",
+  "expected_disposition": "true_positive_benign_authorized",
+  "expected_s3_score_range": [55, 65],
+  "expected_severity": "SEV3",
+  "note": "Alert 3 of 3 — final recon step is more aggressive (vuln scripts vs SYN/version scan). Severity inches up but disposition recommender should still close as authorized given the 2 prior related incidents with the same source+actor."
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -835,6 +1022,12 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 86, "DEMO-F", "107 Malware — quarantined binary, synthetic hash only", _DEMO_F),
     (SCENARIO_ID_BASE + 87, "DEMO-G", "107 Malware — ACMECORP service acct ad-hoc PowerShell (NetBIOS-only IOC)", _DEMO_G),
     (SCENARIO_ID_BASE + 88, "DEMO-H", "108 Phishing — sender IP is real Tor exit (only TI hit in demo corpus)", _DEMO_H),
+    # v4 HASHIR payloads (2026-06-09) — authorized-pentest recon chain.
+    # 3 alerts share source_ip + actor so related_incidents clusters them.
+    # Offence IDs 90091-90093 (leaving 90089/90090 as buffer after DEMO-H).
+    (SCENARIO_ID_BASE + 91, "HASHIR-A", "1/3 Network recon — TCP SYN scan on WIN-PROD-DB-01 (HASHIR-VAPT-KHI)", _HASHIR_A),
+    (SCENARIO_ID_BASE + 92, "HASHIR-B", "2/3 Network recon — service-version scan on WIN-PROD-APP-01 (same actor + source)", _HASHIR_B),
+    (SCENARIO_ID_BASE + 93, "HASHIR-C", "3/3 Network recon — vuln-script scan on WIN-PROD-WEB-01 (same actor + source)", _HASHIR_C),
 ]
 
 
@@ -901,7 +1094,7 @@ def _wrap_as_qradar_offence(
         "credibility": raw.get("confidence", 50) // 10 if isinstance(raw.get("confidence"), int) else 6,
         "relevance": 8,
         "status": "OPEN",
-        "categories": [scenario_id, "Sophisticated-Test"],
+        "categories": raw.get("qradar_categories") or [scenario_id, "Sophisticated-Test"],
         "category_count": 2,
         "security_category_count": 2,
         "policy_category_count": 0,
