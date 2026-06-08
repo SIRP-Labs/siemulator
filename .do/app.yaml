@@ -1,0 +1,70 @@
+# DigitalOcean App Platform spec for siemulator.
+#
+# First-time create:
+#   doctl apps create --spec .do/app.yaml
+#
+# Update after spec edits (replace <app-id> with the ID from `doctl apps list`):
+#   doctl apps update <app-id> --spec .do/app.yaml
+#
+# After create, set the three SECRET env vars (tokens + admin key) via the
+# DO Apps dashboard OR via `doctl apps update --spec` with an unencrypted copy
+# of this file that has the values inline — DO will encrypt them and store the
+# EV[1:...] ciphertext.
+#
+# Stateless service; instance_count is intentionally 1 because each instance
+# keeps its own `?scenarios=all` one-shot-dedup set. Multi-instance would
+# break that contract — pollers would see the same scenarios re-served on
+# every round-robin hit.
+
+name: siemulator
+region: nyc
+
+services:
+  - name: web
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: SIRP-Labs/siemulator
+    dockerfile_path: /Dockerfile
+    source_dir: /
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs  # $5/mo — stateless mock fits easily
+
+    health_check:
+      http_path: /logscale/api/v1/status
+      initial_delay_seconds: 10
+      period_seconds: 30
+      timeout_seconds: 3
+      success_threshold: 1
+      failure_threshold: 3
+
+    envs:
+      # Plain (non-secret) config — defaults to match the dev experience.
+      # Override `*_PREFIX` if you're mounting siemulator behind paths that
+      # mirror an existing integration (e.g. `/omnisense` for sara-open
+      # backwards compat).
+      - key: SIEMULATOR_LOGSCALE_PREFIX
+        scope: RUN_TIME
+        value: /logscale
+      - key: SIEMULATOR_QRADAR_PREFIX
+        scope: RUN_TIME
+        value: /qradar
+      - key: SIEMULATOR_PORT
+        scope: RUN_TIME
+        value: "8080"
+
+      # SECRET env vars — values intentionally absent. Set them after the app
+      # is created via:
+      #   doctl apps update <app-id> --spec .do/app.yaml.with-secrets
+      # OR via the DO Apps dashboard (Settings → web → Environment Variables).
+      # DO encrypts the values and stores them as EV[1:...] ciphertext.
+      - key: SIEMULATOR_LOGSCALE_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: SIEMULATOR_QRADAR_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: SIEMULATOR_ADMIN_KEY
+        scope: RUN_TIME
+        type: SECRET

@@ -39,6 +39,7 @@ real SIEMs or touching customer telemetry.
 - [What siemulator IS / ISN'T](#what-siemulator-is--isnt)
 - [Performance & limits](#performance--limits)
 - [Roadmap](#roadmap)
+- [Deploy on DigitalOcean App Platform](#deploy-on-digitalocean-app-platform)
 - [Development](#development)
 - [FAQ](#faq)
 - [License](#license)
@@ -519,6 +520,48 @@ Contributions especially welcome on the highest-leverage gaps:
 - **Deterministic mode.** A `SIEMULATOR_SEED` env var that makes
   template choice + IDs + timestamps reproducible across runs, so
   snapshot tests can pin exact responses instead of shape-only contracts.
+
+## Deploy on DigitalOcean App Platform
+
+A ready-to-apply spec ships at [`.do/app.yaml`](.do/app.yaml). It uses
+GitHub auto-deploy from `main`, builds via the repo's `Dockerfile`, and
+sizes for the stateless mock (1 instance, `basic-xxs` — ~$5/mo).
+
+**First-time create:**
+
+```bash
+doctl apps create --spec .do/app.yaml
+# → returns an app ID; note it down.
+```
+
+**Set the three SECRET env vars** (tokens + admin key) via either
+the dashboard (Settings → web → Environment Variables) or by editing a
+local copy of `.do/app.yaml` to inline the values and running
+`doctl apps update <app-id> --spec <local-copy>`. DO encrypts the values
+and stores them as `EV[1:...]` ciphertext — don't commit those.
+
+**Custom domain** (optional): point `siemulator.example.com` at the
+default `<app>.ondigitalocean.app` ingress via CNAME, then add a
+`domains:` block to the spec and `doctl apps update`. DO provisions a
+Let's Encrypt cert automatically.
+
+**Why `instance_count: 1`.** Each instance keeps its own in-memory
+served-scenarios set for `?scenarios=all` one-shot dedup. Running
+multiple instances would break that contract — a round-robin poller
+would see the same scenario re-served on every other hit. If you need
+horizontal scale and don't use one-shot dedup, bump the count freely
+(every other endpoint is request-local and safe to scale).
+
+**Health checks** poll `/logscale/api/v1/status` (no-auth) every 30 s
+with a 10-second initial delay. Failures auto-roll back to the last
+healthy deployment.
+
+**Updates flow.** Every push to `main` triggers a fresh build + zero-
+downtime deploy. CI must be green; if `pytest` or `ruff` fail, the
+build never reaches the platform. Multi-arch Docker images keep getting
+published to `ghcr.io/sirp-labs/siemulator:<sha>` in parallel — pin a
+specific tag in the spec if you want immutable deploys instead of
+"latest-on-main."
 
 ## Development
 
