@@ -16,7 +16,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 from siemulator import __version__
-from siemulator.config import MOCK_SOURCE, logscale_prefix, qradar_prefix
+from siemulator.config import MOCK_SOURCE, logscale_prefix, qradar_prefix, splunk_prefix
 
 
 def build_router() -> APIRouter:
@@ -33,6 +33,7 @@ def build_router() -> APIRouter:
         mock_source=MOCK_SOURCE,
         logscale_prefix=logscale_prefix(),
         qradar_prefix=qradar_prefix(),
+        splunk_prefix=splunk_prefix(),
     )
 
     @router.get("/", response_class=HTMLResponse)
@@ -42,13 +43,21 @@ def build_router() -> APIRouter:
     return router
 
 
-def _render(*, version: str, mock_source: str, logscale_prefix: str, qradar_prefix: str) -> str:
+def _render(
+    *,
+    version: str,
+    mock_source: str,
+    logscale_prefix: str,
+    qradar_prefix: str,
+    splunk_prefix: str,
+) -> str:
     """Render the single-page HTML with the configured prefixes baked in."""
     return _HTML_TEMPLATE.format(
         version=version,
         mock_source=mock_source,
         ls=logscale_prefix,
         qr=qradar_prefix,
+        sp=splunk_prefix,
     )
 
 
@@ -298,8 +307,9 @@ _HTML_TEMPLATE = """<!doctype html>
     <a class="primary" href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub ↗</a>
     <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide ↗</a>
     <a href="/docs" target="_blank">OpenAPI docs</a>
-    <a href="{ls}/api/v1/status">{ls}/api/v1/status</a>
-    <a href="{qr}/api/help">{qr}/api/help</a>
+    <a href="{ls}/api/v1/status">{ls}</a>
+    <a href="{qr}/api/help">{qr}</a>
+    <a href="{sp}/services/server/info">{sp}</a>
   </div>
 </header>
 
@@ -312,13 +322,17 @@ _HTML_TEMPLATE = """<!doctype html>
     <code>qradar-dev-token</code>.
   </p>
   <div class="row">
-    <div style="flex:1; min-width:260px;">
+    <div style="flex:1; min-width:200px;">
       <label for="tok-ls">LogScale token</label>
       <input id="tok-ls" type="text" value="logscale-dev-token" oninput="renderCurls()" style="width:100%;">
     </div>
-    <div style="flex:1; min-width:260px;">
+    <div style="flex:1; min-width:200px;">
       <label for="tok-qr">QRadar token</label>
       <input id="tok-qr" type="text" value="qradar-dev-token" oninput="renderCurls()" style="width:100%;">
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label for="tok-sp">Splunk token</label>
+      <input id="tok-sp" type="text" value="splunk-dev-token" oninput="renderCurls()" style="width:100%;">
     </div>
   </div>
 
@@ -333,6 +347,9 @@ _HTML_TEMPLATE = """<!doctype html>
 
   <p>All 22 multi-source attack scenarios at once:</p>
   <pre class="code"><button class="copy" onclick="copyCode(this)">copy</button><span id="curl-sc"></span></pre>
+
+  <p>Splunk oneshot search:</p>
+  <pre class="code"><button class="copy" onclick="copyCode(this)">copy</button><span id="curl-sp"></span></pre>
 </section>
 
 <section>
@@ -342,13 +359,21 @@ _HTML_TEMPLATE = """<!doctype html>
     <div>
       <label for="try-endpoint">Endpoint</label>
       <select id="try-endpoint" onchange="renderTryDefaults()">
-        <option value="ls-status">GET {ls}/api/v1/status (no auth)</option>
-        <option value="ls-alerts">GET {ls}/api/v1/repositories/detections/alerts (Bearer)</option>
-        <option value="ls-query">GET {ls}/api/v1/repositories/detections/query (Bearer)</option>
-        <option value="qr-help">GET {qr}/api/help (no auth)</option>
-        <option value="qr-offenses">GET {qr}/api/siem/offenses (SEC)</option>
-        <option value="qr-scenarios-all">GET {qr}/api/siem/offenses?scenarios=all (SEC)</option>
-        <option value="qr-scenarios">GET {qr}/api/siem/scenarios (SEC)</option>
+        <optgroup label="LogScale">
+          <option value="ls-status">GET {ls}/api/v1/status (no auth)</option>
+          <option value="ls-alerts">GET {ls}/api/v1/repositories/detections/alerts (Bearer)</option>
+          <option value="ls-query">GET {ls}/api/v1/repositories/detections/query (Bearer)</option>
+        </optgroup>
+        <optgroup label="QRadar">
+          <option value="qr-help">GET {qr}/api/help (no auth)</option>
+          <option value="qr-offenses">GET {qr}/api/siem/offenses (SEC)</option>
+          <option value="qr-scenarios-all">GET {qr}/api/siem/offenses?scenarios=all (SEC)</option>
+          <option value="qr-scenarios">GET {qr}/api/siem/scenarios (SEC)</option>
+        </optgroup>
+        <optgroup label="Splunk">
+          <option value="sp-info">GET {sp}/services/server/info (no auth)</option>
+          <option value="sp-export">GET {sp}/services/search/jobs/export (Bearer)</option>
+        </optgroup>
       </select>
     </div>
     <div>
@@ -361,6 +386,61 @@ _HTML_TEMPLATE = """<!doctype html>
   </div>
   <div id="try-meta" class="response-meta" style="display:none;"></div>
   <div id="try-response" class="response-area empty">Response will appear here.</div>
+</section>
+
+<section>
+  <h2>Live alert ticker <span class="count">Server-Sent Events · same-origin</span></h2>
+  <p>
+    Streams synthetic alerts from <code>{ls}/api/v1/repositories/detections/stream</code>
+    via the browser's <code>EventSource</code> API. One alert per
+    <em>rate</em> seconds. Disconnects cleanly when you click Stop or
+    leave the page.
+  </p>
+  <div class="row">
+    <div>
+      <label for="ticker-rate">Rate (alerts/sec)</label>
+      <input id="ticker-rate" type="text" value="1" style="min-width:80px;">
+    </div>
+    <div style="align-self:flex-end;">
+      <button class="primary" id="ticker-toggle" onclick="toggleTicker()">▶ Start</button>
+    </div>
+    <div style="align-self:flex-end; color:var(--text-dim); font-size:12px;">
+      <span id="ticker-count">0 alerts received</span>
+    </div>
+  </div>
+  <div id="ticker-feed" class="response-area empty" style="max-height:240px;">
+    Click <strong>Start</strong> to begin the live stream.
+  </div>
+</section>
+
+<section>
+  <h2>Failure injection <span class="count">chaos engineering · admin-gated</span></h2>
+  <p>
+    Inject configurable faults to test how your consumer handles
+    5xx, rate-limits, slow responses, and corrupt JSON. Per-request
+    overrides (anyone can use) attach a <code>?inject_…</code> param to any
+    request. Live-tunable env-default % via the admin endpoints below.
+  </p>
+  <p style="margin-top:8px;">Try a one-shot fault on any endpoint:</p>
+  <pre class="code"><button class="copy" onclick="copyCode(this)">copy</button><span>curl -i "{qr}/api/help?inject_status=503"
+curl -i "{qr}/api/help?inject_latency=2000"
+curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</span></pre>
+
+  <p style="margin-top:16px;">Live-tune env-default fault rates (admin-key required):</p>
+  <div class="row">
+    <input id="faults-key" type="password" placeholder="X-Admin-Key" style="flex:1; min-width:200px;">
+    <button onclick="getFaults()">Current config</button>
+    <button onclick="resetFaults()">Reset to env</button>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div><label for="faults-5xx">5xx %</label><input id="faults-5xx" type="text" value="0" style="min-width:60px;"></div>
+    <div><label for="faults-429">429 %</label><input id="faults-429" type="text" value="0" style="min-width:60px;"></div>
+    <div><label for="faults-latency">Latency ms</label><input id="faults-latency" type="text" value="0" style="min-width:80px;"></div>
+    <div><label for="faults-malformed">Malformed %</label><input id="faults-malformed" type="text" value="0" style="min-width:60px;"></div>
+    <div style="align-self:flex-end;"><button class="primary" onclick="applyFaults()">Apply</button></div>
+  </div>
+  <div id="faults-meta" class="response-meta" style="display:none;"></div>
+  <div id="faults-response" class="response-area empty">Faults config will appear here.</div>
 </section>
 
 <section>
@@ -409,6 +489,7 @@ _HTML_TEMPLATE = """<!doctype html>
     <li><span class="method get">GET</span><span class="path">{ls}/api/v1/repositories/{{repo}}/query?q=&amp;limit=N</span></li>
     <li><span class="method post">POST</span><span class="path">{ls}/api/v1/repositories/{{repo}}/queryjobs</span></li>
     <li><span class="method get">GET</span><span class="path">{ls}/api/v1/repositories/{{repo}}/queryjobs/{{id}}</span></li>
+    <li><span class="method get">GET</span><span class="path">{ls}/api/v1/repositories/{{repo}}/stream</span><span class="note">SSE push, ?rate=N&amp;max_count=N</span></li>
     <li>&nbsp;</li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/help</span><span class="note">health (no auth)</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/offenses</span><span class="note">?scenarios=all|batch|replay|mix</span></li>
@@ -418,6 +499,12 @@ _HTML_TEMPLATE = """<!doctype html>
     <li><span class="method post">POST</span><span class="path">{qr}/api/ariel/searches</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}/results</span></li>
+    <li>&nbsp;</li>
+    <li><span class="method get">GET</span><span class="path">{sp}/services/server/info</span><span class="note">health (no auth)</span></li>
+    <li><span class="method post">POST</span><span class="path">{sp}/services/search/jobs</span><span class="note">async submit → {{sid}}</span></li>
+    <li><span class="method get">GET</span><span class="path">{sp}/services/search/jobs/export</span><span class="note">oneshot synchronous</span></li>
+    <li><span class="method get">GET</span><span class="path">{sp}/services/search/jobs/{{sid}}</span></li>
+    <li><span class="method get">GET</span><span class="path">{sp}/services/search/jobs/{{sid}}/results</span></li>
   </ul>
   <details>
     <summary>Admin debug endpoints (require <code>X-Admin-Key</code>)</summary>
@@ -474,9 +561,15 @@ _HTML_TEMPLATE = """<!doctype html>
 <script>
 const LS = "{ls}";
 const QR = "{qr}";
+const SP = "{sp}";
 
 function getTok(kind) {{
-  return document.getElementById("tok-" + kind).value || (kind === "ls" ? "logscale-dev-token" : "qradar-dev-token");
+  const el = document.getElementById("tok-" + kind);
+  if (el && el.value) return el.value;
+  if (kind === "ls") return "logscale-dev-token";
+  if (kind === "qr") return "qradar-dev-token";
+  if (kind === "sp") return "splunk-dev-token";
+  return "";
 }}
 
 function escapeHtml(s) {{
@@ -488,6 +581,7 @@ function escapeHtml(s) {{
 function renderCurls() {{
   const lsTok = getTok("ls");
   const qrTok = getTok("qr");
+  const spTok = getTok("sp");
   const origin = window.location.origin;
   document.getElementById("curl-health").textContent =
     `curl ${{origin}}${{LS}}/api/v1/status`;
@@ -497,6 +591,9 @@ function renderCurls() {{
     `curl -H "SEC: ${{qrTok}}" "${{origin}}${{QR}}/api/siem/offenses"`;
   document.getElementById("curl-sc").textContent =
     `curl "${{origin}}${{QR}}/api/siem/scenarios?token=${{qrTok}}"`;
+  const spEl = document.getElementById("curl-sp");
+  if (spEl) spEl.textContent =
+    `curl -H "Authorization: Bearer ${{spTok}}" \\\\\\n  "${{origin}}${{SP}}/services/search/jobs/export?search=*&count=3"`;
 }}
 
 function copyCode(btn) {{
@@ -511,7 +608,7 @@ function copyCode(btn) {{
 function renderTryDefaults() {{
   const ep = document.getElementById("try-endpoint").value;
   const limitField = document.getElementById("try-limit");
-  if (ep.startsWith("ls-status") || ep.startsWith("qr-help") || ep === "qr-scenarios") {{
+  if (ep === "ls-status" || ep === "qr-help" || ep === "qr-scenarios" || ep === "sp-info") {{
     limitField.value = "";
     limitField.disabled = true;
   }} else if (ep === "qr-scenarios-all" || ep === "qr-offenses") {{
@@ -548,6 +645,10 @@ async function runTry() {{
   }} else if (ep === "qr-scenarios") {{
     url = QR + "/api/siem/scenarios";
     opts.headers = {{ "SEC": qrTok }};
+  }} else if (ep === "sp-info") {{ url = SP + "/services/server/info"; }}
+  else if (ep === "sp-export") {{
+    url = SP + "/services/search/jobs/export?search=*" + (limit ? `&count=${{limit}}` : "");
+    opts.headers = {{ "Authorization": "Bearer " + getTok("sp") }};
   }}
 
   const respArea = document.getElementById("try-response");
@@ -683,6 +784,128 @@ function selectScenario(id) {{
       </div>`;
     }}).join("")}}
   `;
+}}
+
+// ── Live alert ticker (SSE) ────────────────────────────────────
+let _ticker = null;
+let _tickerCount = 0;
+
+function toggleTicker() {{
+  if (_ticker) {{
+    _ticker.close();
+    _ticker = null;
+    document.getElementById("ticker-toggle").textContent = "▶ Start";
+    return;
+  }}
+  const rate = document.getElementById("ticker-rate").value || "1";
+  const lsTok = getTok("ls");
+  const url = LS + "/api/v1/repositories/detections/stream?rate=" + encodeURIComponent(rate) + "&token=" + encodeURIComponent(lsTok);
+  const feed = document.getElementById("ticker-feed");
+  feed.classList.remove("empty");
+  feed.textContent = "";
+  _tickerCount = 0;
+  document.getElementById("ticker-count").textContent = "0 alerts received";
+  document.getElementById("ticker-toggle").textContent = "■ Stop";
+  _ticker = new EventSource(url);
+  _ticker.addEventListener("alert", (ev) => {{
+    try {{
+      const e = JSON.parse(ev.data);
+      const ts = (e["@timestamp"] || "").slice(11, 19);
+      const line = `[${{ts}}] ${{e["event.SeverityName"] || "?"}} · ${{e["event.DetectName"] || "?"}} · ${{e["event.ComputerName"] || "?"}}\\n`;
+      feed.textContent = line + feed.textContent;
+      // Cap the feed at ~50 lines visually
+      const lines = feed.textContent.split("\\n");
+      if (lines.length > 60) feed.textContent = lines.slice(0, 60).join("\\n");
+      _tickerCount++;
+      document.getElementById("ticker-count").textContent = `${{_tickerCount}} alerts received`;
+    }} catch (e) {{}}
+  }});
+  _ticker.addEventListener("end", () => {{
+    _ticker.close();
+    _ticker = null;
+    document.getElementById("ticker-toggle").textContent = "▶ Start";
+  }});
+  _ticker.onerror = (e) => {{
+    feed.textContent = "Stream error (auth? check the LogScale token).\\n" + feed.textContent;
+    _ticker.close();
+    _ticker = null;
+    document.getElementById("ticker-toggle").textContent = "▶ Start";
+  }};
+}}
+
+// Clean up on page unload
+window.addEventListener("beforeunload", () => {{ if (_ticker) _ticker.close(); }});
+
+// ── Faults dials ───────────────────────────────────────────────
+async function getFaults() {{
+  const key = document.getElementById("faults-key").value;
+  const respArea = document.getElementById("faults-response");
+  const metaArea = document.getElementById("faults-meta");
+  respArea.classList.remove("empty");
+  respArea.textContent = "Loading…";
+  try {{
+    const resp = await fetch("/api/faults", {{ headers: {{ "X-Admin-Key": key }} }});
+    const body = await resp.text();
+    let formatted = body;
+    try {{
+      const parsed = JSON.parse(body);
+      formatted = JSON.stringify(parsed, null, 2);
+      if (resp.ok) {{
+        // Populate the dial inputs from the response so Apply round-trips cleanly
+        document.getElementById("faults-5xx").value = parsed.inject_5xx_pct ?? 0;
+        document.getElementById("faults-429").value = parsed.inject_429_pct ?? 0;
+        document.getElementById("faults-latency").value = parsed.inject_latency_ms ?? 0;
+        document.getElementById("faults-malformed").value = parsed.inject_malformed_pct ?? 0;
+      }}
+    }} catch (e) {{}}
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status ${{resp.ok ? "ok" : "fail"}}">${{resp.status}} ${{resp.statusText}}</span><span style="margin-left:auto; color:var(--text-soft);">GET /api/faults</span>`;
+    respArea.textContent = formatted;
+  }} catch (e) {{
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status fail">network error</span><span>${{escapeHtml(e.message)}}</span>`;
+    respArea.textContent = "";
+  }}
+}}
+
+async function applyFaults() {{
+  const key = document.getElementById("faults-key").value;
+  const body = {{
+    enabled: true,
+    inject_5xx_pct: parseFloat(document.getElementById("faults-5xx").value) || 0,
+    inject_429_pct: parseFloat(document.getElementById("faults-429").value) || 0,
+    inject_latency_ms: parseInt(document.getElementById("faults-latency").value) || 0,
+    inject_malformed_pct: parseFloat(document.getElementById("faults-malformed").value) || 0,
+  }};
+  const respArea = document.getElementById("faults-response");
+  const metaArea = document.getElementById("faults-meta");
+  respArea.classList.remove("empty");
+  respArea.textContent = "Updating…";
+  try {{
+    const resp = await fetch("/api/faults", {{
+      method: "PUT",
+      headers: {{ "X-Admin-Key": key, "Content-Type": "application/json" }},
+      body: JSON.stringify(body),
+    }});
+    const text = await resp.text();
+    let formatted = text;
+    try {{ formatted = JSON.stringify(JSON.parse(text), null, 2); }} catch (e) {{}}
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status ${{resp.ok ? "ok" : "fail"}}">${{resp.status}} ${{resp.statusText}}</span><span style="margin-left:auto; color:var(--text-soft);">PUT /api/faults</span>`;
+    respArea.textContent = formatted;
+  }} catch (e) {{
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status fail">network error</span><span>${{escapeHtml(e.message)}}</span>`;
+    respArea.textContent = "";
+  }}
+}}
+
+async function resetFaults() {{
+  const key = document.getElementById("faults-key").value;
+  try {{
+    const resp = await fetch("/api/faults/reset", {{ method: "POST", headers: {{ "X-Admin-Key": key }} }});
+    if (resp.ok) await getFaults();
+  }} catch (e) {{}}
 }}
 
 renderCurls();

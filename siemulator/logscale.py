@@ -21,6 +21,8 @@ field in JSON. No write side — POST/queryjobs stores only an int
 
 from __future__ import annotations
 
+import asyncio
+import json
 import random
 import secrets
 import time
@@ -28,6 +30,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import StreamingResponse
 
 from siemulator.config import MOCK_SOURCE, logscale_prefix, logscale_token, qradar_token
 from siemulator.fault_inject import fault_check
@@ -258,5 +261,80 @@ def _make_router(prefix: str) -> APIRouter:
                 },
             )
         return _envelope(job["events"])
+
+    @router.get("/api/v1/repositories/{repo}/stream")
+    async def stream_alerts(
+        repo: str,
+        request: Request,
+        rate: float = 1.0,
+        max_count: int = 0,
+    ):
+        """Push-style alert feed via Server-Sent Events.
+
+        Pushes one fresh synthetic alert every ``1/rate`` seconds. Default
+        1 alert/sec; ``?rate=5`` for five per second; ``?rate=0.1`` for one
+        every 10 seconds. Clamped to [0.05, 20.0] req/s.
+
+        ``?max_count=N`` ends the stream after N events (useful for
+        bounded tests). ``max_count=0`` (default) is unbounded.
+
+        Auth: same three channels as the pull endpoints. The client's
+        connection close ends the stream — siemulator detects it via
+        the request disconnect signal and stops generating.
+
+        Each event is emitted as one SSE record:
+
+            id: <integer monotonic counter>
+            event: alert
+            data: <single-line JSON of the alert>
+
+        Consumers using EventSource (browser) or sseclient (Python) get
+        first-class push semantics; consumers preferring raw NDJSON can
+        use the same endpoint and parse the lines.
+        """
+        _check_auth(request)
+        # Clamp rate to sane bounds (5 ms minimum interval; 20 Hz ceiling).
+        rate = max(0.05, min(20.0, float(rate)))
+        interval = 1.0 / rate
+
+        async def event_generator():
+            counter = 0
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    event = _build_event(0)
+                    payload = json.dumps(event, separators=(",", ":"))
+                    yield (
+                        f"id: {counter}\n"
+                        f"event: alert\n"
+                        f"data: {payload}\n\n"
+                    )
+                    counter += 1
+                    if 0 < max_count <= counter:
+                        # Emit a final "end" event for clean client shutdown.
+                        yield (
+                            f"id: {counter}\n"
+                            "event: end\n"
+                            f"data: {{\"reason\":\"max_count_reached\","
+                            f"\"emitted\":{counter},"
+                            f"\"x-mock-source\":\"{MOCK_SOURCE}\"}}\n\n"
+                        )
+                        break
+                    await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                # Client disconnected mid-sleep — clean shutdown.
+                raise
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # disable nginx/CF buffering
+                "X-Mock-Source": MOCK_SOURCE,
+            },
+        )
 
     return router
