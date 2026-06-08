@@ -42,8 +42,7 @@ services:
     envs:
       # Plain (non-secret) config — defaults to match the dev experience.
       # Override `*_PREFIX` if you're mounting siemulator behind paths that
-      # mirror an existing integration (e.g. `/omnisense` for sara-open
-      # backwards compat).
+      # mirror an existing integration (any URL path your consumer expects).
       - key: SIEMULATOR_LOGSCALE_PREFIX
         scope: RUN_TIME
         value: /logscale

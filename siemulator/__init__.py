@@ -6,8 +6,9 @@ Two parallel mock surfaces from one template pool:
   /qradar/*    — QRadar shape (offences + Ariel searches)
 
 Mount points are configurable via SIEMULATOR_LOGSCALE_PREFIX /
-SIEMULATOR_QRADAR_PREFIX env vars (set to /omnisense for sara-open
-drop-in compatibility).
+SIEMULATOR_QRADAR_PREFIX / SIEMULATOR_SPLUNK_PREFIX env vars so any
+URL path your consumer expects can be matched without changing the
+consumer's config.
 """
 
 __version__ = "0.1.0"

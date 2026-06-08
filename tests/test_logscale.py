@@ -1,8 +1,4 @@
-"""Pinned regressions for the LogScale mock surface.
-
-Mirrors the contract tests from sara-open/tests/test_siem_mock.py
-(LogScale half), retargeted at the siemulator package.
-"""
+"""Pinned regressions for the LogScale mock surface."""
 
 from __future__ import annotations
 

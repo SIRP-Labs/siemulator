@@ -89,8 +89,8 @@ siemulator, default to the query-param channel — it survives every
 header-stripping proxy without code changes.
 
 Cross-token acceptance means if your consumer was configured against
-sara-open's old `OMNISENSE_MOCK_LOGSCALE_TOKEN` and you accidentally
-paste it as siemulator's `SIEMULATOR_QRADAR_TOKEN`, it still works.
+a legacy token from a previous integration and you accidentally paste
+it as siemulator's `SIEMULATOR_QRADAR_TOKEN`, it still works.
 This isn't laziness — it's a deliberate decision because both surfaces
 serve synthetic data and forgiving config-paste mistakes removes a
 class of friction during integration setup.
@@ -542,15 +542,3 @@ on siemulator in CI / staging / a long-running test environment":
    in a way that breaks your consumer, you find out in your test suite
    (not in production).
 
-## Real-world deployments
-
-- **sara-open** (the AI security assistant siemulator was extracted
-  from) uses siemulator to drive its end-to-end agent-chain tests
-  across the LogScale + QRadar surfaces. See
-  [sara-open's cutover runbook](https://github.com/SIRP-Labs/sara-open/blob/main/docs/runbooks/siemulator-cutover.md)
-  for the operational pattern of "shim a SIEM-mock dependency through
-  a redirect, then cut over to the standalone service."
-
-- Add yours via a PR — open an issue or PR at
-  https://github.com/SIRP-Labs/siemulator with `INTEGRATION:`
-  in the title and a one-paragraph description of how you're using it.

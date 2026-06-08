@@ -156,7 +156,7 @@ take any path.
   origin — pick endpoint, paste token, see formatted JSON + status +
   latency.
 - A **scenario browser** for the 38 multi-source attack narratives:
-  click S1/S2/.../TEST-J/DEMO-A/HASHIR-A/ENRICH-A chips to expand each chain with
+  click S1/S2/.../TEST-J/DEMO-A/SCAN-A/ENRICH-A chips to expand each chain with
   per-alert source labels and raw-alert JSON.
 - A **detection templates** table with the 6 templates and their MITRE
   tactic + technique IDs.
@@ -362,12 +362,12 @@ where a single sophisticated event tells the whole story.
 
 #### Batch 3 — synthetic-IOC fixtures (DEMO-A through DEMO-H, 8 offences)
 
-Mirrors the 8 demo3-tenant incidents from
-[sara-open#1083](https://github.com/SIRP-Labs/sara-open/issues/1083).
+Eight synthetic-IOC fixtures with
+enrichment-bypass testing.
 Every IOC uses a deliberately synthetic pattern that public TI sources
 have no record of — **RFC 5737 TEST-NET IPs** (`198.51.100.x`,
-`192.0.2.x`, `203.0.113.x`), **NetBIOS-shape names** (REWTERZ /
-ACMECORP / `*.example.local`), **48-char placeholder hashes** (not
+`192.0.2.x`, `203.0.113.x`), **NetBIOS-shape names** (CORPA /
+CORPB / `*.example.local`), **48-char placeholder hashes** (not
 valid SHA-256/SHA-1/MD5), and **fictional domains**
 (`update-check-cdn.net`, `acme-portal-secure.net`). Each IOC is
 annotated with a `pattern` tag (`rfc5737_testnet` / `fictional` /
@@ -383,12 +383,12 @@ public-TI round-trips.
 | **DEMO-D**     | 90084      | 107 Malware                           | HR-workstation unsigned binary, placeholder hash + NetBIOS user identifier     |
 | **DEMO-E**     | 90085      | 114 Cloud Security → 111              | AWS IAM `AttachUserPolicy` privilege-escalation from RFC 5737 source IP        |
 | **DEMO-F**     | 90086      | 107 Malware                           | EDR-quarantined binary, synthetic-hash-only IOC                                |
-| **DEMO-G**     | 90087      | 107 Malware                           | ACMECORP service account running ad-hoc PowerShell AD-recon (NetBIOS-only IOC) |
-| **DEMO-H**     | 90088      | 108 Phishing                          | Sender IP is a **real Tor exit node** — the only IOC in the corpus that public TI consistently identifies (see sara-open #1078) |
+| **DEMO-G**     | 90087      | 107 Malware                           | CORPB service account running ad-hoc PowerShell AD-recon (NetBIOS-only IOC) |
+| **DEMO-H**     | 90088      | 108 Phishing                          | Sender IP is a **real Tor exit node** — the only IOC in the corpus that public TI consistently identifies (public TI tags it via TorProject) |
 
-#### Batch 4 — actor-attribution / related-incidents fixtures (HASHIR-A through HASHIR-C, 3 offences)
+#### Batch 4 — actor-attribution / related-incidents fixtures (SCAN-A through SCAN-C, 3 offences)
 
-Three sibling alerts from the same actor (`HASHIR-VAPT-KHI`) and same
+Three sibling alerts from the same actor (`SECTEAM\\pentester-01`) and same
 source IP (`10.50.5.42`) targeting three different production hosts
 over ~20 minutes. Designed to drive **Entity Agent** (Q1 actor lookup
 via `am_name: user` IOCs) **AND** give `related_incidents` a
@@ -404,9 +404,9 @@ should close them as `true_positive_benign_authorized`.
 
 | `_scenario_id` | offence ID | QRadar categories                          | Target          | Scan technique               | Expected disposition           |
 | -------------- | ---------- | ------------------------------------------ | --------------- | ---------------------------- | ------------------------------ |
-| **HASHIR-A**   | 90091      | Port Scan · Network Reconnaissance         | WIN-PROD-DB-01  | TCP SYN scan (nmap -sS)      | `true_positive_benign_authorized` |
-| **HASHIR-B**   | 90092      | Network Reconnaissance · Suspicious Network Activity | WIN-PROD-APP-01 | Service version (nmap -sV)   | `true_positive_benign_authorized` |
-| **HASHIR-C**   | 90093      | Network Reconnaissance · Port Scan         | WIN-PROD-WEB-01 | Vuln scripts (nmap --script vuln) | `true_positive_benign_authorized` |
+| **SCAN-A**   | 90091      | Port Scan · Network Reconnaissance         | WIN-PROD-DB-01  | TCP SYN scan (nmap -sS)      | `true_positive_benign_authorized` |
+| **SCAN-B**   | 90092      | Network Reconnaissance · Suspicious Network Activity | WIN-PROD-APP-01 | Service version (nmap -sV)   | `true_positive_benign_authorized` |
+| **SCAN-C**   | 90093      | Network Reconnaissance · Port Scan         | WIN-PROD-WEB-01 | Vuln scripts (nmap --script vuln) | `true_positive_benign_authorized` |
 
 Each `_raw_alert` ships a `qradar_categories` override (read by
 `_wrap_as_qradar_offence`) so the QRadar offence's `categories` field
@@ -455,9 +455,9 @@ is exercised, not just the malicious path.
 | `placeholder_*`| Synthetic — placeholder file hashes                     | DEMO scenarios          | Short-circuit               |
 | `ti_*`         | **Real public-TI-attributable** — should round-trip    | ENRICH-A through ENRICH-E | Full enrichment             |
 | `tor_exit_*`   | Tor exit node                                           | DEMO-H, ENRICH-D       | Enrich (TorProject + GreyNoise) |
-| `authorized_pentest_*` | Authorized internal pentest actor               | HASHIR-A through HASHIR-C | Cross-reference with related_incidents |
-| `internal_corp_*` | Internal corp address ranges                        | HASHIR scenarios        | Skip external TI (internal-only) |
-| `recon_tool`   | Known recon tool (nmap, masscan, ...)                   | HASHIR scenarios        | Tool-attribution lookup    |
+| `authorized_pentest_*` | Authorized internal pentest actor               | SCAN-A through SCAN-C | Cross-reference with related_incidents |
+| `internal_corp_*` | Internal corp address ranges                        | SCAN scenarios        | Skip external TI (internal-only) |
+| `recon_tool`   | Known recon tool (nmap, masscan, ...)                   | SCAN scenarios        | Tool-attribution lookup    |
 
 The full scenario corpus lives in `siemulator/scenarios.py` — JSON-defined
 payloads parsed once at import. Add your own by extending the registry

@@ -54,6 +54,6 @@ The highest-leverage contributions:
 ## Reporting bugs
 
 Open an issue with the request that failed (URL, headers minus tokens,
-expected vs actual response). For shape regressions (e.g. "OmniSense ingest
+expected vs actual response). For shape regressions (e.g. "my consumer's ingest
 script crashes on field X"), include the consumer's read pattern — the
 test we add will pin the field name + type.

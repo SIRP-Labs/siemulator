@@ -1,9 +1,7 @@
 """Pinned regressions for the QRadar mock surface.
 
-Mirrors the contract tests from sara-open/tests/test_siem_mock.py
-(QRadar half), retargeted at the siemulator package. Shape pins
-(``id`` field, ``start_time`` ms-epoch) are CRITICAL — breaking them
-crashes real QRadar ingestion scripts.
+Shape pins (``id`` field, ``start_time`` ms-epoch) are CRITICAL —
+breaking them crashes real QRadar ingestion scripts.
 """
 
 from __future__ import annotations

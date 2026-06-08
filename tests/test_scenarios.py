@@ -8,7 +8,7 @@ def test_scenarios_module_loads():
 
     out = scenarios.all_scenarios_as_qradar()
     assert len(out) == 38, (
-        "expected exactly 38 scenario alerts (12 S1-S5 + 10 v2 TEST A-J + 8 v3 DEMO A-H + 3 v4 HASHIR A-C + 5 v5 ENRICH A-E)"
+        "expected exactly 38 scenario alerts (12 S1-S5 + 10 v2 TEST A-J + 8 v3 DEMO A-H + 3 v4 SCAN A-C + 5 v5 ENRICH A-E)"
     )
     ids = [s["id"] for s in out]
     assert all(90_000 < i < 90_100 for i in ids)
@@ -78,7 +78,7 @@ def test_scenarios_preserve_multi_source_narratives():
     }
 
 
-# ── v3 DEMO scenarios — synthetic-IOC fixtures (sara-open#1083) ──
+# ── v3 DEMO scenarios — synthetic-IOC fixtures (bypass-detector positive cases) ──
 
 
 def test_demo_scenarios_present():
@@ -137,8 +137,8 @@ def test_demo_scenarios_carry_synthetic_iocs():
     )
 
 
-def test_demo_a_matches_issue_1083_shape():
-    """DEMO-A pins the issue#1083 incident 285759 shape — 107 Malware,
+def test_demo_a_shape():
+    """DEMO-A is the BENIGN_AUTHORIZED malware fixture — 107 Malware,
     4 IOCs, BENIGN_AUTHORIZED expected verdict."""
     from siemulator import scenarios
 
@@ -172,82 +172,82 @@ def test_demo_h_is_only_demo_with_real_ti_hit():
                 assert ioc.get("pattern") != "tor_exit_node"
 
 
-# ── v4 HASHIR scenarios — authorized-pentest recon chain ──────────
+# ── v4 SCAN scenarios — authorized-pentest recon chain ──────────
 
 
-def test_hashir_scenarios_present():
-    """All 3 HASHIR scenarios (A-C) at offence IDs 90091-90093."""
+def test_scan_scenarios_present():
+    """All 3 SCAN scenarios (A-C) at offence IDs 90091-90093."""
     from siemulator import scenarios
 
-    hashirs = [
+    scans = [
         s
         for s in scenarios.all_scenarios_as_qradar()
-        if s.get("_scenario_id", "").startswith("HASHIR-")
+        if s.get("_scenario_id", "").startswith("SCAN-")
     ]
-    assert len(hashirs) == 3
-    labels = sorted(s["_scenario_id"] for s in hashirs)
-    assert labels == ["HASHIR-A", "HASHIR-B", "HASHIR-C"]
-    ids = sorted(s["id"] for s in hashirs)
+    assert len(scans) == 3
+    labels = sorted(s["_scenario_id"] for s in scans)
+    assert labels == ["SCAN-A", "SCAN-B", "SCAN-C"]
+    ids = sorted(s["id"] for s in scans)
     assert ids == [90091, 90092, 90093]
 
 
-def test_hashir_share_source_ip_and_actor():
-    """All 3 HASHIR alerts share source_ip + actor — load-bearing for
+def test_scan_share_source_ip_and_actor():
+    """All 3 SCAN alerts share source_ip + actor — load-bearing for
     related_incidents clustering (same_source_ip + same_user anchors)."""
     from siemulator import scenarios
 
     out = scenarios.all_scenarios_as_qradar()
-    hashirs = [s for s in out if s.get("_scenario_id", "").startswith("HASHIR-")]
-    assert len(hashirs) == 3
-    actors = {h["_raw_alert"]["actor"]["username"] for h in hashirs}
-    source_ips = {h["_raw_alert"]["actor"]["source_ip"] for h in hashirs}
-    assert actors == {"HASHIR-VAPT-KHI"}, "all 3 must share actor for Entity Agent"
+    scans = [s for s in out if s.get("_scenario_id", "").startswith("SCAN-")]
+    assert len(scans) == 3
+    actors = {h["_raw_alert"]["actor"]["username"] for h in scans}
+    source_ips = {h["_raw_alert"]["actor"]["source_ip"] for h in scans}
+    assert actors == {"SECTEAM\\pentester-01"}, "all 3 must share actor for Entity Agent"
     assert source_ips == {"10.50.5.42"}, (
         "all 3 must share source_ip for related_incidents same_source_ip anchor"
     )
 
 
-def test_hashir_target_each_different_host():
-    """Each HASHIR alert targets a different production host — the
+def test_scan_target_each_different_host():
+    """Each SCAN alert targets a different production host — the
     chain shape (one actor, one source, three targets) is what makes
     the disposition recommender able to roll all three into one
     authorized-pentest verdict."""
     from siemulator import scenarios
 
     out = scenarios.all_scenarios_as_qradar()
-    hashirs = [s for s in out if s.get("_scenario_id", "").startswith("HASHIR-")]
-    targets = sorted(h["_raw_alert"]["target"]["hostname"] for h in hashirs)
+    scans = [s for s in out if s.get("_scenario_id", "").startswith("SCAN-")]
+    targets = sorted(h["_raw_alert"]["target"]["hostname"] for h in scans)
     assert targets == ["WIN-PROD-APP-01", "WIN-PROD-DB-01", "WIN-PROD-WEB-01"]
-    target_ips = sorted(h["_raw_alert"]["target"]["ip"] for h in hashirs)
+    target_ips = sorted(h["_raw_alert"]["target"]["ip"] for h in scans)
     assert target_ips == ["10.10.20.30", "10.10.20.31", "10.10.20.32"]
 
 
-def test_hashir_iocs_drive_entity_agent_lookup():
-    """Each HASHIR raw alert must declare a user-type IOC with the
-    HASHIR-VAPT-KHI value — that's what triggers Entity Agent (Q1)."""
+def test_scan_iocs_drive_entity_agent_lookup():
+    """Each SCAN raw alert must declare a user-type IOC with the
+    SECTEAM\\pentester-01 value — that's what triggers Entity Agent (Q1)."""
     from siemulator import scenarios
 
     out = scenarios.all_scenarios_as_qradar()
-    hashirs = [s for s in out if s.get("_scenario_id", "").startswith("HASHIR-")]
-    for h in hashirs:
+    scans = [s for s in out if s.get("_scenario_id", "").startswith("SCAN-")]
+    for h in scans:
         user_iocs = [
             i for i in h["_raw_alert"]["iocs"] if i["type"] == "user"
         ]
         assert len(user_iocs) == 1, (
             f"{h['_scenario_id']} must have exactly one user-type IOC"
         )
-        assert user_iocs[0]["value"] == "HASHIR-VAPT-KHI"
+        assert user_iocs[0]["value"] == "SECTEAM\\pentester-01"
 
 
-def test_hashir_qradar_categories_override():
-    """HASHIR scenarios override the default `Sophisticated-Test`
+def test_scan_qradar_categories_override():
+    """SCAN scenarios override the default `Sophisticated-Test`
     category with realistic Port Scan / Network Reconnaissance labels
-    so OmniSense routes the iti_category correctly."""
+    so consumers route the category correctly."""
     from siemulator import scenarios
 
     out = scenarios.all_scenarios_as_qradar()
-    hashirs = [s for s in out if s.get("_scenario_id", "").startswith("HASHIR-")]
-    for h in hashirs:
+    scans = [s for s in out if s.get("_scenario_id", "").startswith("SCAN-")]
+    for h in scans:
         assert "Sophisticated-Test" not in h["categories"], (
             f"{h['_scenario_id']} should override the default category"
         )
@@ -266,16 +266,16 @@ def test_hashir_qradar_categories_override():
         )
 
 
-def test_hashir_borderline_severity_drives_sev3():
-    """Severity=Medium → magnitude=5 → maps to SEV3 in OmniSense.
+def test_scan_borderline_severity_drives_sev3():
+    """Severity=Medium → magnitude=5 → maps to SEV3 in a typical consumer.
     Confidence=55-60 → credibility=5-6 → drives s3_score 50-60.
     Pinned so future changes don't accidentally drift the boundary."""
     from siemulator import scenarios
 
     out = scenarios.all_scenarios_as_qradar()
-    hashirs = [s for s in out if s.get("_scenario_id", "").startswith("HASHIR-")]
-    for h in hashirs:
-        # Severity 5 in QRadar = Medium = should map to SEV3 in OmniSense
+    scans = [s for s in out if s.get("_scenario_id", "").startswith("SCAN-")]
+    for h in scans:
+        # Severity 5 in QRadar = Medium = should map to SEV3 in a typical consumer
         assert h["severity"] == 5, (
             f"{h['_scenario_id']} severity must be 5 (Medium) to drive SEV3"
         )

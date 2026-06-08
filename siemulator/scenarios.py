@@ -1,8 +1,7 @@
 """Sophisticated attack scenario payloads for /qradar/api/siem/scenarios.
 
-Source: Faiz's hand-crafted multi-source attack narratives designed to
-test capabilities no other AI security tool can match. Each scenario
-exercises a specific analytical capability:
+Hand-crafted multi-source attack narratives. Each scenario exercises
+a specific analytical capability:
 
   S1 — Living-off-the-Land Supply Chain (5 alerts, 4 tools, 47 min)
   S2 — Identity Attack Chain: MFA fatigue → token theft → persistence
@@ -12,14 +11,12 @@ exercises a specific analytical capability:
 
 Each raw alert (Proofpoint / Defender / CrowdStrike / Zscaler / Entra /
 Eclypsium / Purview / WAF / CloudWatch) is wrapped as a QRadar offence
-so OmniSense's existing QRadar ingestion script (act 636 / act 1456)
-consumes it byte-identically — no Go-side script changes needed.
+so a typical QRadar ingestion script consumes it byte-identically — no
+script changes needed.
 
-Stable offence IDs (90001-90013) so OmniSense's dedup-by-id logic
+Stable offence IDs across the scenario library so consumer dedup-by-id
 treats each replay as the same incident. To force re-ingest, bump the
-``SCENARIO_ID_BASE`` constant or use ``?fresh=1`` query param.
-
-Mock-source marker preserved per Pattern-11.
+``SCENARIO_ID_BASE`` constant or POST /qradar/_debug/reset_scenarios.
 """
 
 from __future__ import annotations
@@ -63,7 +60,7 @@ _S1_A2 = _j(r"""
   "alert": {"name": "Suspicious file download from SharePoint",
             "category": "InitialAccess"},
   "device": {"hostname": "PROC-WS-0331", "ip": "10.10.15.31",
-             "user": "ACMECORP\\s.rahman", "department": "Procurement",
+             "user": "CORPB\\s.rahman", "department": "Procurement",
              "risk_level": "Medium", "s3_score": 65},
   "file": {"name": "VendorAgreement_Q2_2026_PricingTool.exe",
            "sha256": "b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8",
@@ -82,7 +79,7 @@ _S1_A3 = _j(r"""
                 "description": "Signed binary loaded unsigned DLL from same directory",
                 "technique": "T1574.002"},
   "host": {"hostname": "PROC-WS-0331", "ip": "10.10.15.31", "s3_score": 65},
-  "user": {"username": "ACMECORP\\s.rahman", "department": "Procurement"},
+  "user": {"username": "CORPB\\s.rahman", "department": "Procurement"},
   "process": {
     "name": "VendorAgreement_Q2_2026_PricingTool.exe",
     "sha256": "b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8",
@@ -105,7 +102,7 @@ _S1_A4 = _j(r"""
   "timestamp": "2026-05-22T08:47:33Z", "severity": "High", "confidence": 75,
   "alert": {"name": "Living-off-the-land binary used for reconnaissance",
             "category": "Discovery"},
-  "device": {"hostname": "PROC-WS-0331", "user": "ACMECORP\\s.rahman"},
+  "device": {"hostname": "PROC-WS-0331", "user": "CORPB\\s.rahman"},
   "process_tree": [
     {"name": "sync.exe", "parent": "svchost.exe",
      "note": "Launched by Task Scheduler — hourly persistence task fired"},
@@ -170,7 +167,7 @@ _S3 = _j(r"""
   "source": "Eclypsium Firmware Scanner", "event_type": "FirmwareAnomaly",
   "timestamp": "2026-05-22T14:33:27Z", "severity": "Critical", "confidence": 92,
   "device": {
-    "hostname": "EXEC-WS-001", "user": "ACMECORP\\c.nakamura",
+    "hostname": "EXEC-WS-001", "user": "CORPB\\c.nakamura",
     "title": "Chief Technology Officer", "asset_criticality": "CRITICAL", "s3_score": 98,
     "secure_boot": "Enabled", "tpm_version": "2.0", "bios_vendor": "AMI", "bios_version": "F.52"
   },
@@ -214,7 +211,7 @@ _S4 = _j(r"""
     {"type": "EVIDENCE_DESTRUCTION", "detail": "Ran 'cipher /w:Downloads' (secure wipe), cleared Chrome history, deleted FlickrUploader logs"}
   ],
   "non_compete": {"status": "Active", "scope": "ML/AI roles at competitors for 24 months",
-                  "ip_assignment": "All work product ACMECORP property per employment agreement S 7.3"}
+                  "ip_assignment": "All work product CORPB property per employment agreement S 7.3"}
 }
 """)
 
@@ -298,7 +295,7 @@ _TA = _j(r"""
             "description": "TGT lifetime exceeds domain policy max (10h) by 87.6x (876h/36.5d). RC4-HMAC instead of AES256.",
             "technique": "T1558.001"},
   "source_device": {"hostname": "DEV-WS-0194", "ip": "10.10.22.94", "os": "Windows 11 Enterprise",
-                    "domain": "ACMECORP", "last_logon_user": "ACMECORP\\t.williams", "department": "Software Development"},
+                    "domain": "CORPB", "last_logon_user": "CORPB\\t.williams", "department": "Software Development"},
   "ticket_details": {"ticket_type": "TGT", "target_domain": "acmecorp.local",
                      "encryption_type": "RC4-HMAC (0x17)", "domain_policy_encryption": "AES256-CTS-HMAC-SHA1-96 (0x12)",
                      "ticket_lifetime_hours": 876, "domain_max_ticket_lifetime_hours": 10,
@@ -323,7 +320,7 @@ _TB = _j(r"""
                 "description": "Suspicious process tree from w3wp.exe (IIS worker) on Exchange Server"},
   "host": {"hostname": "EXCH-01", "ip": "10.10.3.10", "os": "Windows Server 2019",
            "role": "Exchange Server 2019 CU12", "patch_level": "March 2024 SU",
-           "domain": "ACMECORP", "s3_score": 95, "internet_facing": true},
+           "domain": "CORPB", "s3_score": 95, "internet_facing": true},
   "process_tree": [
     {"name": "w3wp.exe", "pid": 4412, "user": "NT AUTHORITY\\SYSTEM",
      "command_line": "w3wp.exe -ap \"MSExchangeOWAAppPool\"", "note": "IIS worker for OWA"},
@@ -361,7 +358,7 @@ _TC = _j(r"""
   "alert": {"name": "DNS Tunneling Activity Detected",
             "description": "High-entropy DNS queries with abnormal subdomain length and frequency"},
   "source_device": {"hostname": "ENG-WS-0455", "ip": "10.10.20.55",
-                    "user": "ACMECORP\\j.park", "department": "Engineering", "os": "macOS Sequoia 16.1"},
+                    "user": "CORPB\\j.park", "department": "Engineering", "os": "macOS Sequoia 16.1"},
   "dns_analysis": {
     "query_domain": "t1.data.update-check-cdn.net",
     "authoritative_ns": "ns1.update-check-cdn.net (45.77.65.211)",
@@ -558,7 +555,7 @@ _TI = _j(r"""
   "timestamp": "2026-06-01T15:45:00Z", "severity": "High", "confidence": 75,
   "call_details": {"caller_id": "+1-212-555-0100", "caller_id_spoofed": true,
                    "real_source": "VoIP trunk via Twilio, registered to 'Meridian Advisory LLC', 3 days ago",
-                   "called_number": "+1-415-555-0200 (ACMECORP Finance Dept)", "duration_seconds": 847,
+                   "called_number": "+1-415-555-0200 (CORPB Finance Dept)", "duration_seconds": 847,
                    "recording_available": true, "recording_path": "/recordings/2026-06-01/call_847291.wav"},
   "voice_analysis": {"deepfake_probability": 94,
                      "voice_match": {"claimed_identity": "James Morrison (CEO)", "voice_profile_match": 89,
@@ -582,7 +579,7 @@ _TJ = _j(r"""
   "timestamp": "2026-06-01T01:15:00Z", "severity": "Critical", "confidence": 87,
   "alert": {"name": "Malicious Group Policy Object Modification",
             "description": "Unauthorized GPO created and linked to domain root — deploys scheduled task to all domain-joined computers"},
-  "actor": {"username": "ACMECORP\\svc-sccm", "display_name": "SCCM Service Account",
+  "actor": {"username": "CORPB\\svc-sccm", "display_name": "SCCM Service Account",
             "source_ip": "10.10.22.94", "source_hostname": "DEV-WS-0194",
             "note": "svc-sccm should only modify GPOs from SCCM server (10.10.3.50), not dev workstation. Compromised."},
   "gpo_details": {"gpo_name": "Windows Update Configuration - Security Baseline v4.2",
@@ -610,25 +607,22 @@ _TJ = _j(r"""
 """)
 
 
-# ── v3 DEMO payloads (2026-06-09) — synthetic-IOC fixtures ────────
+# ── v3 DEMO payloads — synthetic-IOC fixtures ────────────────────
 #
-# Issue: https://github.com/SIRP-Labs/sara-open/issues/1083
-#
-# These 8 scenarios mirror the 8 demo3 incidents observed in the
-# 2026-06-09 enrichment deep-dive. Every IOC uses a deliberately
-# synthetic pattern that public TI sources have no record of:
+# Eight scenarios where every IOC uses a deliberately synthetic pattern
+# that public TI sources have no record of:
 #
 #   • RFC 5737 TEST-NET IPs:   198.51.100.x / 192.0.2.x / 203.0.113.x
-#   • NetBIOS-shape names:     REWTERZ / ACMECORP / *.example.local
+#   • NetBIOS-shape names:     CORPA / CORPB / *.example.local
 #   • 48-char placeholder hashes (NOT valid SHA-256/SHA-1/MD5)
 #   • Fictional domains:       update-check-cdn.net, etc.
 #
-# Purpose: provide a deterministic test fixture for downstream
-# enrichment-bypass / synthetic-IOC-detector work (#1083 proposal a).
-# A consumer running these scenarios should NOT hit public TI APIs —
-# pattern-match on the synthetic-IOC shape and short-circuit.
+# Purpose: a deterministic test fixture for downstream enrichment-
+# bypass / synthetic-IOC-detector work. A consumer running these
+# scenarios should NOT round-trip to public TI APIs — pattern-match on
+# the synthetic-IOC shape and short-circuit.
 #
-# Categories covered (matching demo3 source distribution):
+# Categories covered span the typical SIEM incident taxonomy:
 #   107 Malware · 108 Phishing · 110 Network Anomaly · 111 Cloud
 #   Security · 114 Cloud Security · 123 (Phishing escalation)
 
@@ -639,17 +633,17 @@ _DEMO_A = _j(r"""
   "category": "107 Malware",
   "alert": {"name": "Suspected PUP / admin-tool execution",
             "description": "Sysmon flagged admin-tool launch on managed-services workstation. 4 IOCs observed; verdict pending enrichment."},
-  "host": {"hostname": "WIN-DESKTOP-01.example.local", "domain": "REWTERZ",
+  "host": {"hostname": "WIN-DESKTOP-01.example.local", "domain": "CORPA",
            "ip": "198.51.100.77",
            "note": "RFC 5737 TEST-NET-2 IP — reserved for documentation; not internet-routable."},
-  "process": {"name": "psexec.exe", "user": "REWTERZ\\admin.svc",
+  "process": {"name": "psexec.exe", "user": "CORPA\\admin.svc",
               "sha256": "d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2",
               "note": "48-char placeholder hash — NOT a valid SHA-256 (would be 64 chars). Synthetic fixture only."},
   "iocs": [
     {"type": "ip", "value": "198.51.100.77", "pattern": "rfc5737_testnet"},
     {"type": "domain", "value": "update-check-cdn.net", "pattern": "fictional"},
     {"type": "hash_synthetic", "value": "d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "pattern": "placeholder_48char"},
-    {"type": "user", "value": "REWTERZ\\admin.svc", "pattern": "netbios_internal"}
+    {"type": "user", "value": "CORPA\\admin.svc", "pattern": "netbios_internal"}
   ],
   "expected_verdict": "BENIGN_AUTHORIZED",
   "note": "Admin tools on managed-services workstations are sanctioned. Roll-up to BENIGN_AUTHORIZED if all IOCs synthetic-pattern + actor in admin role."
@@ -705,14 +699,14 @@ _DEMO_D = _j(r"""
   "category": "107 Malware",
   "alert": {"name": "Suspicious binary on HR workstation",
             "description": "Unsigned binary executed under HR intern session. 2 IOCs."},
-  "host": {"hostname": "HR-WORKSTATION-09.example.local", "domain": "REWTERZ",
+  "host": {"hostname": "HR-WORKSTATION-09.example.local", "domain": "CORPA",
            "ip": "10.20.40.55"},
-  "process": {"name": "invoice_viewer.exe", "user": "REWTERZ\\hr.intern",
+  "process": {"name": "invoice_viewer.exe", "user": "CORPA\\hr.intern",
               "sha256": "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4",
               "note": "48-char placeholder hash"},
   "iocs": [
     {"type": "hash_synthetic", "value": "f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4", "pattern": "placeholder_48char"},
-    {"type": "user", "value": "REWTERZ\\hr.intern", "pattern": "netbios_internal"}
+    {"type": "user", "value": "CORPA\\hr.intern", "pattern": "netbios_internal"}
   ],
   "expected_verdict": "VERIFICATION_REQUIRED"
 }
@@ -764,12 +758,12 @@ _DEMO_G = _j(r"""
   "timestamp": "2026-06-09T14:12:44Z", "severity": "Medium", "confidence": 50,
   "category": "107 Malware",
   "alert": {"name": "Service account ran ad-hoc PowerShell",
-            "description": "Service account ACMECORP\\service.acc invoked PowerShell outside its scheduled-task window."},
-  "host": {"hostname": "DC-PRIMARY.example.local", "domain": "ACMECORP"},
-  "process": {"name": "powershell.exe", "user": "ACMECORP\\service.acc",
+            "description": "Service account CORPB\\service.acc invoked PowerShell outside its scheduled-task window."},
+  "host": {"hostname": "DC-PRIMARY.example.local", "domain": "CORPB"},
+  "process": {"name": "powershell.exe", "user": "CORPB\\service.acc",
               "command_line": "powershell.exe -ep bypass -nop -c Get-ADUser -Filter *"},
   "iocs": [
-    {"type": "user", "value": "ACMECORP\\service.acc", "pattern": "netbios_internal"}
+    {"type": "user", "value": "CORPB\\service.acc", "pattern": "netbios_internal"}
   ],
   "expected_verdict": "SUSPICIOUS",
   "note": "Behaviour signal is real (service acct doing AD recon), actor identifier is NetBIOS-internal so no external TI hit."
@@ -782,29 +776,29 @@ _DEMO_H = _j(r"""
   "timestamp": "2026-06-09T15:30:01Z", "severity": "Medium", "confidence": 55,
   "category": "108 Phishing",
   "alert": {"name": "Phishing — sender IP is Tor exit node",
-            "description": "Phishing email arrived from a Tor exit node. Only IOC is the Tor IP (the one TI source that ever cites this in demo3)."},
+            "description": "Phishing email arrived from a Tor exit node. Only IOC is the Tor IP (the only TI hit in this corpus)."},
   "message": {"from": "noreply@acme-corp-billing.example",
               "to": ["accounts.payable@example.local"],
               "subject": "Final notice — payment overdue",
               "sender_ip": "185.220.101.34",
-              "note": "185.220.101.x is a real Tor-exit /24. The ONLY enrichment hit demo3 currently sees (TorProject)."},
+              "note": "185.220.101.x is a real Tor-exit /24. The only TI source that reliably attributes this range is TorProject."},
   "iocs": [
     {"type": "ip", "value": "185.220.101.34", "pattern": "tor_exit_node",
-     "note": "Real Tor exit IP — only IOC in the demo corpus that public TI consistently identifies. See sara-open #1078 for the cross-attribution issue this IOC triggers."}
+     "note": "Real Tor exit IP — only IOC in the demo corpus that public TI consistently identifies. See the cross-attribution issue this IOC triggers for the cross-attribution issue this IOC triggers."}
   ],
   "expected_verdict": "SUSPICIOUS"
 }
 """)
 
 
-# ── v4 HASHIR payloads (2026-06-09) — authorized-pentest recon chain ──
+# ── v4 SCAN payloads (2026-06-09) — authorized-pentest recon chain ──
 #
-# Three sibling alerts from the same actor (HASHIR-VAPT-KHI) and same
+# Three sibling alerts from the same actor (SECTEAM\\pentester-01) and same
 # source IP (10.50.5.42) targeting three different production hosts
 # over ~20 minutes. Designed to:
 #
-#   • Drive Entity Agent (sara-open Q1 actor lookup) — every alert
-#     carries actor.username = HASHIR-VAPT-KHI + iocs[].type = "user"
+#   • Drive Entity Agent (actor-attribution flow) — every alert
+#     carries actor.username = SECTEAM\\pentester-01 + iocs[].type = "user"
 #   • Give related_incidents a same_source_ip + same_user clustering
 #     anchor so the disposition recommender can roll all three into
 #     a single "authorized pentest" verdict
@@ -816,7 +810,7 @@ _DEMO_H = _j(r"""
 # "Network Reconnaissance" / "Suspicious Network Activity" instead of
 # the generic "Sophisticated-Test" label.
 
-_HASHIR_A = _j(r"""
+_SCAN_A = _j(r"""
 {
   "source": "QRadar",
   "event_type": "NetworkReconnaissance",
@@ -830,7 +824,7 @@ _HASHIR_A = _j(r"""
     "description": "Sustained TCP SYN scan from internal host targeting database tier ports (22, 80, 443, 1433, 3389) on WIN-PROD-DB-01. 12 src→dst flows in 90s."
   },
   "actor": {
-    "username": "HASHIR-VAPT-KHI",
+    "username": "SECTEAM\\pentester-01",
     "display_name": "Hashir (VAPT Karachi)",
     "source_ip": "10.50.5.42",
     "source_hostname": "VAPT-KHI-WS-04",
@@ -857,11 +851,11 @@ _HASHIR_A = _j(r"""
   "iocs": [
     {"type": "source_ip", "value": "10.50.5.42", "pattern": "internal_corp_source"},
     {"type": "destination_ip", "value": "10.10.20.30", "pattern": "internal_corp_dest"},
-    {"type": "user", "value": "HASHIR-VAPT-KHI", "pattern": "authorized_pentest_actor"},
+    {"type": "user", "value": "SECTEAM\\pentester-01", "pattern": "authorized_pentest_actor"},
     {"type": "process", "value": "nmap.exe", "pattern": "recon_tool"}
   ],
   "compromised_asset": "WIN-PROD-DB-01",
-  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:HASHIR-VAPT-KHI"],
+  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:SECTEAM\\pentester-01"],
   "expected_verdict": "VERIFICATION_REQUIRED",
   "expected_disposition": "true_positive_benign_authorized",
   "expected_s3_score_range": [50, 60],
@@ -870,7 +864,7 @@ _HASHIR_A = _j(r"""
 }
 """)
 
-_HASHIR_B = _j(r"""
+_SCAN_B = _j(r"""
 {
   "source": "QRadar",
   "event_type": "NetworkReconnaissance",
@@ -884,11 +878,11 @@ _HASHIR_B = _j(r"""
     "description": "Service-version enumeration (nmap -sV) from same internal source observed in incident 9 minutes earlier. New target: WIN-PROD-APP-01. Targets app-server ports (80, 443, 8080, 8443, 5985)."
   },
   "actor": {
-    "username": "HASHIR-VAPT-KHI",
+    "username": "SECTEAM\\pentester-01",
     "display_name": "Hashir (VAPT Karachi)",
     "source_ip": "10.50.5.42",
     "source_hostname": "VAPT-KHI-WS-04",
-    "note": "Same actor + source as alert 1 (HASHIR-A). related_incidents should cluster these on same_source_ip + same_user."
+    "note": "Same actor + source as alert 1 (SCAN-A). related_incidents should cluster these on same_source_ip + same_user."
   },
   "process": {
     "name": "nmap.exe",
@@ -915,20 +909,20 @@ _HASHIR_B = _j(r"""
   "iocs": [
     {"type": "source_ip", "value": "10.50.5.42", "pattern": "internal_corp_source"},
     {"type": "destination_ip", "value": "10.10.20.31", "pattern": "internal_corp_dest"},
-    {"type": "user", "value": "HASHIR-VAPT-KHI", "pattern": "authorized_pentest_actor"},
+    {"type": "user", "value": "SECTEAM\\pentester-01", "pattern": "authorized_pentest_actor"},
     {"type": "process", "value": "nmap.exe", "pattern": "recon_tool"}
   ],
   "compromised_asset": "WIN-PROD-APP-01",
-  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:HASHIR-VAPT-KHI"],
+  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:SECTEAM\\pentester-01"],
   "expected_verdict": "VERIFICATION_REQUIRED",
   "expected_disposition": "true_positive_benign_authorized",
   "expected_s3_score_range": [50, 60],
   "expected_severity": "SEV3",
-  "note": "Alert 2 of 3 — same actor, same source IP, different target. By this point related_incidents should be returning HASHIR-A as a same_source_ip match; Entity Agent should cache the actor profile."
+  "note": "Alert 2 of 3 — same actor, same source IP, different target. By this point related_incidents should be returning SCAN-A as a same_source_ip match; Entity Agent should cache the actor profile."
 }
 """)
 
-_HASHIR_C = _j(r"""
+_SCAN_C = _j(r"""
 {
   "source": "QRadar",
   "event_type": "NetworkReconnaissance",
@@ -942,11 +936,11 @@ _HASHIR_C = _j(r"""
     "description": "Vulnerability-script scan (nmap --script vuln) from same internal source observed in incidents 20 + 10 minutes earlier. New target: WIN-PROD-WEB-01. Active probing of known web-server CVEs."
   },
   "actor": {
-    "username": "HASHIR-VAPT-KHI",
+    "username": "SECTEAM\\pentester-01",
     "display_name": "Hashir (VAPT Karachi)",
     "source_ip": "10.50.5.42",
     "source_hostname": "VAPT-KHI-WS-04",
-    "note": "Same actor + source as alerts 1 (HASHIR-A) and 2 (HASHIR-B). related_incidents should now have 2 prior matches with same_source_ip + same_user — strong signal for authorized-pentest verdict."
+    "note": "Same actor + source as alerts 1 (SCAN-A) and 2 (SCAN-B). related_incidents should now have 2 prior matches with same_source_ip + same_user — strong signal for authorized-pentest verdict."
   },
   "process": {
     "name": "nmap.exe",
@@ -970,11 +964,11 @@ _HASHIR_C = _j(r"""
   "iocs": [
     {"type": "source_ip", "value": "10.50.5.42", "pattern": "internal_corp_source"},
     {"type": "destination_ip", "value": "10.10.20.32", "pattern": "internal_corp_dest"},
-    {"type": "user", "value": "HASHIR-VAPT-KHI", "pattern": "authorized_pentest_actor"},
+    {"type": "user", "value": "SECTEAM\\pentester-01", "pattern": "authorized_pentest_actor"},
     {"type": "process", "value": "nmap.exe", "pattern": "recon_tool"}
   ],
   "compromised_asset": "WIN-PROD-WEB-01",
-  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:HASHIR-VAPT-KHI"],
+  "related_incidents_anchors": ["same_source_ip:10.50.5.42", "same_user:SECTEAM\\pentester-01"],
   "expected_verdict": "VERIFICATION_REQUIRED",
   "expected_disposition": "true_positive_benign_authorized",
   "expected_s3_score_range": [55, 65],
@@ -1232,21 +1226,21 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 53, "S5", "3/4 Zero-Day Chain — webshell + XMRig + crontab persist", _S5_A3),
     (SCENARIO_ID_BASE + 54, "S5", "4/4 Zero-Day Chain — CloudWatch CPU spike + $847/day cost", _S5_A4),
     # v3 DEMO payloads (2026-06-09) — synthetic-IOC fixtures mirroring
-    # the 8 demo3 incidents from sara-open#1083. Offence IDs 90081-90088.
+    # synthetic-IOC fixtures for enrichment-bypass testing. Offence IDs 90081-90088.
     (SCENARIO_ID_BASE + 81, "DEMO-A", "107 Malware — admin-tool/4 IOCs/BENIGN_AUTHORIZED (synthetic-IOC fixture)", _DEMO_A),
     (SCENARIO_ID_BASE + 82, "DEMO-B", "108 Phishing→123 — credential-harvest link, RFC5737 sender IP", _DEMO_B),
     (SCENARIO_ID_BASE + 83, "DEMO-C", "110 Network Anomaly→114 — outbound to RFC5737 + fictional domain", _DEMO_C),
     (SCENARIO_ID_BASE + 84, "DEMO-D", "107 Malware — HR workstation, placeholder hash + NetBIOS user", _DEMO_D),
     (SCENARIO_ID_BASE + 85, "DEMO-E", "114 Cloud Security→111 — AWS IAM AttachUserPolicy from RFC5737 IP", _DEMO_E),
     (SCENARIO_ID_BASE + 86, "DEMO-F", "107 Malware — quarantined binary, synthetic hash only", _DEMO_F),
-    (SCENARIO_ID_BASE + 87, "DEMO-G", "107 Malware — ACMECORP service acct ad-hoc PowerShell (NetBIOS-only IOC)", _DEMO_G),
+    (SCENARIO_ID_BASE + 87, "DEMO-G", "107 Malware — CORPB service acct ad-hoc PowerShell (NetBIOS-only IOC)", _DEMO_G),
     (SCENARIO_ID_BASE + 88, "DEMO-H", "108 Phishing — sender IP is real Tor exit (only TI hit in demo corpus)", _DEMO_H),
-    # v4 HASHIR payloads (2026-06-09) — authorized-pentest recon chain.
+    # v4 SCAN payloads (2026-06-09) — authorized-pentest recon chain.
     # 3 alerts share source_ip + actor so related_incidents clusters them.
     # Offence IDs 90091-90093 (leaving 90089/90090 as buffer after DEMO-H).
-    (SCENARIO_ID_BASE + 91, "HASHIR-A", "1/3 Network recon — TCP SYN scan on WIN-PROD-DB-01 (HASHIR-VAPT-KHI)", _HASHIR_A),
-    (SCENARIO_ID_BASE + 92, "HASHIR-B", "2/3 Network recon — service-version scan on WIN-PROD-APP-01 (same actor + source)", _HASHIR_B),
-    (SCENARIO_ID_BASE + 93, "HASHIR-C", "3/3 Network recon — vuln-script scan on WIN-PROD-WEB-01 (same actor + source)", _HASHIR_C),
+    (SCENARIO_ID_BASE + 91, "SCAN-A", "1/3 Network recon — TCP SYN scan on WIN-PROD-DB-01 (SECTEAM\\pentester-01)", _SCAN_A),
+    (SCENARIO_ID_BASE + 92, "SCAN-B", "2/3 Network recon — service-version scan on WIN-PROD-APP-01 (same actor + source)", _SCAN_B),
+    (SCENARIO_ID_BASE + 93, "SCAN-C", "3/3 Network recon — vuln-script scan on WIN-PROD-WEB-01 (same actor + source)", _SCAN_C),
     # v5 ENRICH payloads (2026-06-09) — real public-TI-confirmed IOCs.
     # Positive-path complement to the DEMO synthetic-IOC batch.
     # Offence IDs 90094-90098.
@@ -1348,7 +1342,7 @@ def _wrap_as_qradar_offence(
         "destination_networks": ["other"],
         "source_network": "Scenario-Mock-Net",
         "domain_id": 1,
-        "domain_name": "REWTERZ",
+        "domain_name": "CORPA",
         "assigned_to": None,
         "closing_user": None,
         "closing_reason_id": None,

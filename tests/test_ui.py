@@ -39,12 +39,12 @@ def test_root_serves_html_by_default():
 
 def test_ui_includes_baked_prefixes(monkeypatch):
     """Configured prefixes get rendered into the curl examples."""
-    monkeypatch.setenv("SIEMULATOR_LOGSCALE_PREFIX", "/omnisense")
-    monkeypatch.setenv("SIEMULATOR_QRADAR_PREFIX", "/qradar-mock")
+    monkeypatch.setenv("SIEMULATOR_LOGSCALE_PREFIX", "/custom-ls")
+    monkeypatch.setenv("SIEMULATOR_QRADAR_PREFIX", "/custom-qr")
     r = _client().get("/")
     body = r.text
-    assert "/omnisense/api/v1/status" in body
-    assert "/qradar-mock/api/help" in body
+    assert "/custom-ls/api/v1/status" in body
+    assert "/custom-qr/api/help" in body
 
 
 def test_ui_can_be_disabled(monkeypatch):
