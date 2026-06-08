@@ -443,7 +443,7 @@ replay the whole library.
 After wiring up any of the recipes above, verify ingestion from both
 sides:
 
-**Siemulator side** — confirm your consumer is hitting the mock:
+**Siemulator side — quick triage (QRadar only, last 100 requests):**
 
 ```bash
 curl -H "X-Admin-Key: $ADMIN_KEY" \
@@ -451,10 +451,38 @@ curl -H "X-Admin-Key: $ADMIN_KEY" \
   | jq '.requests[:5] | .[] | {ts, path, mode, response_count, client}'
 ```
 
-This returns the last 100 requests siemulator saw — path, query
-params, auth channel, response row count. If your consumer's user
-agent / client IP doesn't show up here, the request isn't reaching
-siemulator (firewall? wrong URL?).
+**Siemulator side — full access log across both surfaces (5000 recent
+requests + aggregations):**
+
+```bash
+# Who is consuming what?
+curl -fsS -H "X-Admin-Key: $ADMIN_KEY" \
+  https://your-siemulator/api/access-log/stats \
+  | jq '{ total, top_clients, top_user_agents, by_auth, by_status,
+          duration_ms }'
+
+# Show only YOUR consumer's traffic (filter by IP)
+curl -fsS -H "X-Admin-Key: $ADMIN_KEY" \
+  "https://your-siemulator/api/access-log?limit=50" \
+  | jq '.entries[] | select(.client_ip == "203.0.113.45")'
+
+# Show only failed requests (helps debug "my consumer can't auth")
+curl -fsS -H "X-Admin-Key: $ADMIN_KEY" \
+  "https://your-siemulator/api/access-log?status=401&limit=10" | jq .
+```
+
+The access log records timestamp, path, redacted query, auth channel
+name (`bearer` / `sec` / `query` / `none` — never the token value),
+client IP (X-Forwarded-For aware), user-agent, status, duration in
+ms, and response bytes. If your consumer's IP / user-agent doesn't
+show up in `top_clients` / `top_user_agents`, the request isn't
+reaching siemulator (firewall? wrong URL? DNS?).
+
+The same records also go to stdout as structured JSON lines —
+`docker logs siemulator | jq .` or `doctl apps logs <app-id>
+--follow` will tail them in real time, which is often the fastest
+way to debug "why isn't my poller hitting siemulator?" during
+initial integration setup.
 
 **Consumer side** — confirm your tool can read the mock-source marker:
 

@@ -40,6 +40,7 @@ endpoints interactively, and copy curl snippets — try the live demo at
 - [Use as a test fixture](#use-as-a-test-fixture)
 - [Wire it into your SIEM / SOAR](#wire-it-into-your-siem--soar)
 - [Debug endpoints](#debug-endpoints)
+- [Access log](#access-log)
 - [Safety markers](#safety-markers)
 - [Architecture](#architecture)
 - [What siemulator IS / ISN'T](#what-siemulator-is--isnt)
@@ -128,6 +129,9 @@ All via env vars. Defaults work for local testing — override in production.
 | `SIEMULATOR_HOST`              | `0.0.0.0`              | Bind host                                              |
 | `SIEMULATOR_PORT`              | `8080`                 | Bind port                                              |
 | `SIEMULATOR_UI_ENABLED`        | `true`                 | Web UI at `/`. Set `false` for pure-API mode           |
+| `SIEMULATOR_ACCESS_LOG_ENABLED`| `true`                 | Capture every API request to a ring + stdout (see [Access log](#access-log)) |
+| `SIEMULATOR_ACCESS_LOG_SIZE`   | `5000`                 | In-memory ring capacity                                |
+| `SIEMULATOR_ACCESS_LOG_SKIP_HEALTH` | `false`           | Skip `/status` / `/api/help` to reduce noise           |
 
 See [`.env.example`](.env.example).
 
@@ -455,6 +459,57 @@ to diagnose "my poller hits siemulator but my SOAR shows zero incidents"
 — you can see the exact path, query params, auth channel, and first-row
 preview that went over the wire.
 
+## Access log
+
+Every request to `/logscale/*` and `/qradar/*` is captured into a
+bounded in-memory ring AND emitted as a structured JSON line to stdout
+(uvicorn forwards it to the platform log surface — DO Apps, Docker
+logs, k8s, etc. pick it up for free).
+
+**Recorded per request:** timestamp, method, path, redacted query
+string, auth channel (`bearer` / `sec` / `query` / `none`), client IP
+(X-Forwarded-For-aware), user-agent (truncated to 200 chars), status,
+duration in ms, response bytes.
+
+**Never recorded:** Bearer / SEC token values, `?token=` query-param
+value, `X-Admin-Key`, cookies, request body, response body. Pin
+[`tests/test_access_log.py`](tests/test_access_log.py) guarantees the
+literal token strings never leak.
+
+**Admin endpoints** (require `SIEMULATOR_ADMIN_KEY` set + sent on the
+request; 403 otherwise):
+
+| Method | Path                              | Purpose                                          |
+| ------ | --------------------------------- | ------------------------------------------------ |
+| GET    | `/api/access-log`                 | Recent entries, newest first. Filters: `?limit`, `?since`, `?path_prefix`, `?status`, `?auth` |
+| GET    | `/api/access-log/stats`           | Aggregates: `by_status`, `by_auth`, `top_paths`, `top_clients`, `top_user_agents`, `duration_ms` (avg/p50/p95/p99/max), `total_response_bytes` |
+| POST   | `/api/access-log/clear`           | Wipe the in-memory ring (stdout log untouched)   |
+
+**Example: "who consumed what" in the last hour:**
+
+```bash
+curl -fsS -H "X-Admin-Key: $SIEMULATOR_ADMIN_KEY" \
+  "https://your-siemulator/api/access-log/stats" | jq '{
+    total,
+    top_clients,
+    top_user_agents,
+    by_auth,
+    by_status
+  }'
+```
+
+**Knobs** (env vars):
+
+| Variable                             | Default | Purpose                                            |
+| ------------------------------------ | ------- | -------------------------------------------------- |
+| `SIEMULATOR_ACCESS_LOG_ENABLED`      | `true`  | Disable everything — middleware + admin endpoints   |
+| `SIEMULATOR_ACCESS_LOG_SIZE`         | `5000`  | Ring capacity (~3 days at 60-s polling cadence)    |
+| `SIEMULATOR_ACCESS_LOG_SKIP_HEALTH`  | `false` | Skip noisy `/status` / `/api/help` (useful when DO Apps' 30-s probe would dominate the log) |
+
+For platform-level retention beyond the in-memory ring, your platform
+log collector picks up the stdout JSON lines and routes them to your
+SIEM / log warehouse / Grafana Loki / wherever.
+
 ## Safety markers
 
 Every response carries `X-Mock-Source: siemulator` (HTTP header) and
@@ -474,6 +529,7 @@ siemulator/
 ├── templates.py    # 6 detection templates + HOSTNAMES + USERS pool
 ├── scenarios.py    # 22 multi-source attack narratives
 ├── ui.py           # Single-page web UI at / (inlined HTML/CSS/JS)
+├── access_log.py   # Middleware + /api/access-log endpoints
 └── __main__.py     # `python -m siemulator` entrypoint
 ```
 

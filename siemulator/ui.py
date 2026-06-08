@@ -437,6 +437,27 @@ _HTML_TEMPLATE = """<!doctype html>
   </details>
 </section>
 
+<section>
+  <h2>Access log <span class="count">who consumed what · admin-gated</span></h2>
+  <p>
+    Every request to <code>{ls}/*</code> and <code>{qr}/*</code> is captured
+    with timestamp, method, path, redacted query, auth channel, client IP,
+    user-agent, status, duration, and response size. Token values are
+    <strong>never</strong> recorded — only the channel name
+    (<code>bearer</code> / <code>sec</code> / <code>query</code> / <code>none</code>).
+    Set <code>X-Admin-Key</code> below to probe.
+  </p>
+  <div class="row">
+    <input id="al-key" type="password" placeholder="X-Admin-Key" style="flex:1; min-width:240px;">
+    <button onclick="runAccessLog('recent')">Recent (20)</button>
+    <button onclick="runAccessLog('stats')">Aggregations</button>
+    <button onclick="runAccessLog('qradar-only')">QRadar only</button>
+    <button onclick="runAccessLog('errors-only')">Errors only</button>
+  </div>
+  <div id="al-meta" class="response-meta" style="display:none;"></div>
+  <div id="al-response" class="response-area empty">Access-log response will appear here.</div>
+</section>
+
 <footer>
   <p>
     <code>x-mock-source: {mock_source}</code> ·
@@ -564,6 +585,32 @@ async function runAdmin(which) {{
   respArea.classList.remove("empty");
   respArea.textContent = "Loading…";
   const url = QR + "/_debug/" + which;
+  try {{
+    const resp = await fetch(url, {{ headers: {{ "X-Admin-Key": key }} }});
+    const body = await resp.text();
+    let formatted = body;
+    try {{ formatted = JSON.stringify(JSON.parse(body), null, 2); }} catch (e) {{}}
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status ${{resp.ok ? "ok" : "fail"}}">${{resp.status}} ${{resp.statusText}}</span><span style="margin-left:auto; color:var(--text-soft);">${{url}}</span>`;
+    respArea.textContent = formatted;
+  }} catch (e) {{
+    metaArea.style.display = "flex";
+    metaArea.innerHTML = `<span class="status fail">network error</span><span>${{escapeHtml(e.message)}}</span>`;
+    respArea.textContent = "";
+  }}
+}}
+
+async function runAccessLog(which) {{
+  const key = document.getElementById("al-key").value;
+  const respArea = document.getElementById("al-response");
+  const metaArea = document.getElementById("al-meta");
+  respArea.classList.remove("empty");
+  respArea.textContent = "Loading…";
+  let url;
+  if (which === "stats") url = "/api/access-log/stats";
+  else if (which === "qradar-only") url = "/api/access-log?path_prefix=" + encodeURIComponent(QR) + "&limit=20";
+  else if (which === "errors-only") url = "/api/access-log?status=401&limit=20";
+  else url = "/api/access-log?limit=20";
   try {{
     const resp = await fetch(url, {{ headers: {{ "X-Admin-Key": key }} }});
     const body = await resp.text();

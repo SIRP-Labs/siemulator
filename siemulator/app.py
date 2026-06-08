@@ -5,7 +5,13 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from siemulator import __version__
-from siemulator.config import MOCK_SOURCE, ui_enabled
+from siemulator.config import (
+    MOCK_SOURCE,
+    access_log_enabled,
+    logscale_prefix,
+    qradar_prefix,
+    ui_enabled,
+)
 from siemulator.logscale import build_router as build_logscale_router
 from siemulator.qradar import build_router as build_qradar_router
 
@@ -50,4 +56,18 @@ def create_app() -> FastAPI:
 
     app.include_router(build_logscale_router())
     app.include_router(build_qradar_router())
+
+    if access_log_enabled():
+        # Register middleware AFTER routers so it wraps every handled
+        # request, and register the admin router so /api/access-log[/*]
+        # is reachable.
+        from siemulator.access_log import AccessLogMiddleware
+        from siemulator.access_log import build_router as build_access_log_router
+
+        app.add_middleware(
+            AccessLogMiddleware,
+            bound_prefixes=(logscale_prefix(), qradar_prefix()),
+        )
+        app.include_router(build_access_log_router())
+
     return app
