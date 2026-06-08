@@ -984,6 +984,225 @@ _HASHIR_C = _j(r"""
 """)
 
 
+# ── v5 ENRICH payloads (2026-06-09) — real public-TI-confirmed IOCs ──
+#
+# The positive-path complement to the DEMO batch (which uses synthetic
+# IOCs and tests the enrichment-BYPASS detector). These 5 scenarios
+# carry IOCs that public threat-intel sources reliably tag:
+#
+#   • AlienVault OTX
+#   • abuse.ch ThreatFox / URLhaus / MalwareBazaar
+#   • VirusTotal
+#   • GreyNoise (scanner attribution + Tor exit tagging)
+#   • PhishTank / OpenPhish
+#
+# Every IOC carries `pattern: "ti_*"` so downstream consumers can tell
+# this from synthetic-pattern IOCs without parsing the value. Designed
+# for testing the full enrichment chain — agent should round-trip to
+# public TI, receive positive attribution, and the chain should resolve
+# to MALICIOUS with high confidence.
+
+_ENRICH_A = _j(r"""
+{
+  "source": "CrowdStrike Falcon",
+  "event_type": "RansomwareDetection",
+  "timestamp": "2026-06-09T16:08:42Z",
+  "severity": "Critical",
+  "confidence": 95,
+  "category": "107 Malware (Ransomware)",
+  "qradar_categories": ["Ransomware", "Malware Outbreak"],
+  "alert": {
+    "name": "Known WannaCry ransomware sample executed",
+    "description": "EDR detonated SMB-spreading executable matching WannaCry v2 signature. SHA-256 confirmed against MalwareBazaar + 64/72 VT detections at last query. Kill-switch domain present in binary — host attempted DNS lookup but firewall blocked egress."
+  },
+  "host": {"hostname": "FIN-LAPTOP-22.example.local", "ip": "10.20.40.55", "user": "EXAMPLE\\analyst"},
+  "process": {
+    "name": "tasksche.exe",
+    "command_line": "tasksche.exe",
+    "parent": "@WanaDecryptor@.exe",
+    "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
+  },
+  "network": {
+    "killswitch_domain": "iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com",
+    "killswitch_lookup_blocked": true,
+    "smb_scan_targets": ["10.20.40.0/24", "10.20.41.0/24"],
+    "note": "Without killswitch lookup, WannaCry proceeds to encrypt. Firewall block was the only thing stopping spread on this host."
+  },
+  "iocs": [
+    {"type": "hash_sha256", "value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+     "pattern": "ti_known_wannacry",
+     "note": "Real WannaCry sample hash, documented by Microsoft + US-CERT + VT 64+/72. AlienVault OTX pulse: WannaCry."},
+    {"type": "domain", "value": "iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com",
+     "pattern": "ti_known_wannacry_killswitch",
+     "note": "WannaCry kill-switch domain. Sinkholed by MalwareTech 2017-05-12. ThreatFox + AlienVault tagged."}
+  ],
+  "compromised_asset": "FIN-LAPTOP-22.example.local",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed",
+  "expected_ti_sources": ["VirusTotal", "AlienVault OTX", "ThreatFox", "MalwareBazaar"],
+  "expected_severity": "SEV1",
+  "note": "Positive-path test: enrichment agent should round-trip to public TI, receive >5 source confirmations, return MALICIOUS_CONFIRMED with confidence ~0.95. Contrast with DEMO-A (BENIGN_AUTHORIZED) — both are 107 Malware but the IOC patterns drive opposite verdicts."
+}
+""")
+
+_ENRICH_B = _j(r"""
+{
+  "source": "QRadar",
+  "event_type": "C2Callback",
+  "timestamp": "2026-06-09T16:34:11Z",
+  "severity": "Critical",
+  "confidence": 90,
+  "category": "109 Command and Control",
+  "qradar_categories": ["Command and Control", "Suspicious Network Activity"],
+  "alert": {
+    "name": "Historical Stuxnet C2 callback observed",
+    "description": "Outbound DNS resolution to known Stuxnet C2 domain from internal SCADA-adjacent host. The domains were the original Stuxnet hard-coded C2 — sinkholed since 2010 but still in every TI database. Either reinfection from old media OR researcher testing."
+  },
+  "host": {"hostname": "ENG-OT-WS-07.example.local", "ip": "10.30.91.205",
+           "role": "Engineering OT-adjacent workstation"},
+  "network": {
+    "outbound_dns_lookups": [
+      {"domain": "mypremierfutbol.com", "timestamp": "2026-06-09T16:34:11Z", "resolved_to": "94.102.49.193"},
+      {"domain": "todaysfutbol.com", "timestamp": "2026-06-09T16:34:15Z", "resolved_to": "94.102.49.193"}
+    ],
+    "connection_attempt": "TCP 443 → 94.102.49.193 (sinkhole)",
+    "result": "Blocked at proxy — no payload delivered"
+  },
+  "iocs": [
+    {"type": "domain", "value": "mypremierfutbol.com",
+     "pattern": "ti_known_stuxnet",
+     "note": "Original Stuxnet C2 domain. Sinkholed by Symantec ~2010, in every TI feed since. AlienVault, ThreatFox, MISP, OTX."},
+    {"type": "domain", "value": "todaysfutbol.com",
+     "pattern": "ti_known_stuxnet",
+     "note": "Second Stuxnet hard-coded C2. Same provenance as mypremierfutbol.com — sinkholed, universally TI-tagged."}
+  ],
+  "compromised_asset": "ENG-OT-WS-07.example.local",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_historical",
+  "expected_ti_sources": ["AlienVault OTX", "ThreatFox", "MISP", "Cisco Umbrella"],
+  "expected_severity": "SEV1",
+  "note": "Positive-path test with historical-but-TI-attributed IOCs. Useful because the sinkhole means no real payload risk — but a real consumer chain should still escalate aggressively because Stuxnet IOC sighting on an OT-adjacent host is high-signal regardless of sinkhole status."
+}
+""")
+
+_ENRICH_C = _j(r"""
+{
+  "source": "Microsoft Defender for Endpoint",
+  "event_type": "MalwareDetection",
+  "timestamp": "2026-06-09T17:00:00Z",
+  "severity": "Informational",
+  "confidence": 100,
+  "category": "107 Malware (Test signature)",
+  "qradar_categories": ["Malware", "Test Detection"],
+  "alert": {
+    "name": "EICAR test file written to disk",
+    "description": "EICAR antivirus test file detected on disk. This is the universally-recognized AV testing signature — every TI source identifies it as the EICAR test pattern. Positive-control case: confirms the enrichment pipeline can return 100% confidence MALICIOUS verdict from a fully-attributable IOC."
+  },
+  "host": {"hostname": "DEV-BUILD-03.example.local", "ip": "10.30.55.77",
+           "user": "EXAMPLE\\security.tester"},
+  "process": {
+    "name": "notepad.exe",
+    "command_line": "notepad.exe C:\\Users\\Public\\eicar.com",
+    "parent": "explorer.exe"
+  },
+  "file": {
+    "path": "C:\\Users\\Public\\eicar.com",
+    "size_bytes": 68,
+    "sha256": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f",
+    "md5": "44d88612fea8a8f36de82e1278abb02f"
+  },
+  "iocs": [
+    {"type": "hash_sha256", "value": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f",
+     "pattern": "ti_eicar_test",
+     "note": "EICAR antivirus test file SHA-256. Universal — every AV + TI source identifies as the EICAR test signature."},
+    {"type": "hash_md5", "value": "44d88612fea8a8f36de82e1278abb02f",
+     "pattern": "ti_eicar_test",
+     "note": "EICAR antivirus test file MD5 — same provenance as the SHA-256 above."}
+  ],
+  "compromised_asset": "DEV-BUILD-03.example.local",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_benign_test",
+  "expected_ti_sources": ["VirusTotal", "AlienVault OTX", "MalwareBazaar", "Microsoft", "ClamAV"],
+  "expected_severity": "SEV4",
+  "note": "Positive-control test. EICAR is intentionally benign — disposition is true_positive_benign_test (a real detection of a real test signature), not true_positive_confirmed. Severity stays low because every consumer should recognize EICAR. If a chain ever escalates this to SEV1+, the chain is broken."
+}
+""")
+
+_ENRICH_D = _j(r"""
+{
+  "source": "Zscaler ZIA",
+  "event_type": "AnonymizationEgress",
+  "timestamp": "2026-06-09T17:21:55Z",
+  "severity": "High",
+  "confidence": 80,
+  "category": "117 Recon (Anonymization)",
+  "qradar_categories": ["Tor Egress", "Anonymization Network"],
+  "alert": {
+    "name": "Outbound traffic to confirmed Tor exit node",
+    "description": "User workstation initiated direct TCP 443 connection to an IP in the Tor exit node /24. Multiple TI sources (TorProject directory, GreyNoise, AbuseIPDB) confirm the destination as an active Tor exit. No business justification on file."
+  },
+  "host": {"hostname": "MKT-LAPTOP-14.example.local", "ip": "10.40.15.88",
+           "user": "EXAMPLE\\marketing.lead"},
+  "network": {
+    "source_ip": "10.40.15.88",
+    "destination_ip": "185.220.101.45",
+    "destination_port": 443,
+    "destination_country": "DE (TorProject exit)",
+    "bytes_transferred": 14823,
+    "connection_duration_seconds": 67
+  },
+  "iocs": [
+    {"type": "ip", "value": "185.220.101.45",
+     "pattern": "ti_tor_exit_real",
+     "note": "Real active Tor exit node IP in the documented 185.220.101.0/24 range. TorProject directory confirms; GreyNoise tags as 'tor_exit_node'; AbuseIPDB confidence 100% for anonymizer abuse."}
+  ],
+  "compromised_asset": "MKT-LAPTOP-14.example.local",
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "true_positive_requires_review",
+  "expected_ti_sources": ["TorProject", "GreyNoise", "AbuseIPDB"],
+  "expected_severity": "SEV2",
+  "note": "Tor egress is a yellow-flag — could be insider exfil prep, could be a privacy-conscious analyst on legitimate browsing. Enrichment confirms the destination is Tor; the verdict (SUSPICIOUS vs CONFIRMED) depends on whether the org has a written Tor policy. Disposition recommender should escalate to human review."
+}
+""")
+
+_ENRICH_E = _j(r"""
+{
+  "source": "QRadar",
+  "event_type": "InternetScanReceived",
+  "timestamp": "2026-06-09T17:48:30Z",
+  "severity": "Low",
+  "confidence": 70,
+  "category": "117 Reconnaissance",
+  "qradar_categories": ["External Scan", "Reconnaissance"],
+  "alert": {
+    "name": "Inbound scan from documented benign internet scanner",
+    "description": "Edge firewall logged TCP SYN scan against perimeter from an IP GreyNoise tags as a 'benign internet scanner' (Shodan-style). Positive-control case for distinguishing 'attacker recon' from 'mass scanner background noise' — enrichment should drive the disposition recommender to auto-close as benign."
+  },
+  "host": {"hostname": "EDGE-FW-01.example.local", "ip": "203.0.113.10 (public-side perimeter)",
+           "scope": "edge firewall logs only — no internal asset reached"},
+  "network": {
+    "source_ip": "71.6.146.185",
+    "source_country": "US (Shodan-attributed)",
+    "destination_subnet": "203.0.113.0/24",
+    "ports_scanned": [80, 443, 8080, 22, 3389, 5985, 1433, 3306],
+    "edge_drop": true,
+    "no_internal_reach": true
+  },
+  "iocs": [
+    {"type": "ip", "value": "71.6.146.185",
+     "pattern": "ti_known_scanner",
+     "note": "Shodan-affiliated mass scanner IP. GreyNoise tag: 'benign_scanner / Shodan.io'. AbuseIPDB confidence ~30 (low — scanner activity, not active abuse). No real C2 / no credentials harvested."}
+  ],
+  "compromised_asset": null,
+  "expected_verdict": "BENIGN_AUTHORIZED",
+  "expected_disposition": "false_positive_scanner_noise",
+  "expected_ti_sources": ["GreyNoise", "Censys"],
+  "expected_severity": "SEV5",
+  "note": "Positive-control for benign-classification path. Enrichment SHOULD identify the IP as a documented scanner and the chain should auto-close as false_positive_scanner_noise. If a chain ever escalates a Shodan/Censys scan to SEV3+, the chain is too aggressive."
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -1028,6 +1247,14 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 91, "HASHIR-A", "1/3 Network recon — TCP SYN scan on WIN-PROD-DB-01 (HASHIR-VAPT-KHI)", _HASHIR_A),
     (SCENARIO_ID_BASE + 92, "HASHIR-B", "2/3 Network recon — service-version scan on WIN-PROD-APP-01 (same actor + source)", _HASHIR_B),
     (SCENARIO_ID_BASE + 93, "HASHIR-C", "3/3 Network recon — vuln-script scan on WIN-PROD-WEB-01 (same actor + source)", _HASHIR_C),
+    # v5 ENRICH payloads (2026-06-09) — real public-TI-confirmed IOCs.
+    # Positive-path complement to the DEMO synthetic-IOC batch.
+    # Offence IDs 90094-90098.
+    (SCENARIO_ID_BASE + 94, "ENRICH-A", "107 Ransomware — known WannaCry sample + kill-switch domain (VT/AlienVault/ThreatFox)", _ENRICH_A),
+    (SCENARIO_ID_BASE + 95, "ENRICH-B", "109 C2 — historical Stuxnet C2 callback (universally TI-tagged)", _ENRICH_B),
+    (SCENARIO_ID_BASE + 96, "ENRICH-C", "107 Malware — EICAR test file (100% TI confidence, positive control)", _ENRICH_C),
+    (SCENARIO_ID_BASE + 97, "ENRICH-D", "117 Recon — outbound to confirmed Tor exit (TorProject/GreyNoise/AbuseIPDB)", _ENRICH_D),
+    (SCENARIO_ID_BASE + 98, "ENRICH-E", "117 Recon — inbound from GreyNoise-tagged benign scanner (Shodan)", _ENRICH_E),
 ]
 
 

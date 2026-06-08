@@ -64,7 +64,7 @@ fails the moment your integration code starts negotiating shape
 
 - **Pin shape regressions in CI.** Every endpoint has a contract test —
   fork them as your integration's golden-shape pins.
-- **Replay 33 hand-crafted multi-source attack scenarios** (phishing →
+- **Replay 38 hand-crafted multi-source attack scenarios** (phishing →
   MFA fatigue → token theft → UEFI bootkit → insider exfil → 0-day SSTI
   → ProxyShell → Golden Ticket → BEC + 10 more). Each is tagged with a
   stable offence ID so dedup-by-ID works across replays — your SOAR
@@ -112,7 +112,7 @@ curl -H "Authorization: Bearer logscale-dev-token" \
 curl -H "SEC: qradar-dev-token" \
   "http://localhost:8080/qradar/api/siem/offenses"
 
-# All 33 multi-source attack scenarios
+# All 38 multi-source attack scenarios
 curl "http://localhost:8080/qradar/api/siem/scenarios?token=qradar-dev-token"
 ```
 
@@ -155,8 +155,8 @@ take any path.
 - An interactive **Try it** panel that runs requests against the same
   origin — pick endpoint, paste token, see formatted JSON + status +
   latency.
-- A **scenario browser** for the 33 multi-source attack narratives:
-  click S1/S2/.../TEST-J/DEMO-A/HASHIR-A chips to expand each chain with
+- A **scenario browser** for the 38 multi-source attack narratives:
+  click S1/S2/.../TEST-J/DEMO-A/HASHIR-A/ENRICH-A chips to expand each chain with
   per-alert source labels and raw-alert JSON.
 - A **detection templates** table with the 6 templates and their MITRE
   tactic + technique IDs.
@@ -190,7 +190,7 @@ liveness probes that should never see HTML.
 | GET    | `/api/help` / `/api/help/capabilities`                  | —    | Health                                 |
 | GET    | `/api/siem/offenses[?scenarios=all\|batch\|replay\|mix]`| ✅   | Active offences + scenario modes       |
 | GET    | `/api/siem/offenses/{id}`                               | ✅   | Single offence (id echoed back)        |
-| GET    | `/api/siem/scenarios`                                   | ✅   | All 33 multi-source attack narratives  |
+| GET    | `/api/siem/scenarios`                                   | ✅   | All 38 multi-source attack narratives  |
 | GET    | `/api/siem/source_addresses`                            | ✅   | IP context (3 synthetic rows)          |
 | POST   | `/api/ariel/searches`                                   | ✅   | Submit (returns COMPLETED immediately) |
 | GET    | `/api/ariel/searches/{id}`                              | ✅   | Status                                 |
@@ -297,7 +297,7 @@ crashes — they're in `tests/test_qradar.py`):
   `POST /qradar/_debug/reset_scenarios` (admin-key gated).
 - **`batch`** — Rotate one scenario per call (round-robin through all
   22). Useful for slow-drip ingestion testing.
-- **`replay`** — All 33 scenarios in one response, ignoring the one-shot
+- **`replay`** — All 38 scenarios in one response, ignoring the one-shot
   dedup set. Useful for one-shot ad-hoc bulk ingestion tests.
 - **`mix`** — All scenarios + N synthetic templates (N from the `Range:
   items=0-N` header). Useful for testing how your consumer handles a
@@ -324,8 +324,8 @@ in `siemulator/templates.py` — add your own by appending to
 
 ### Multi-source attack scenarios
 
-Thirty-three hand-crafted offences spread across four batches, each tagged
-with a stable `offense_id` in `90011-90093` and a `_scenario_id` label.
+Thirty-eight hand-crafted offences spread across five batches, each tagged
+with a stable `offense_id` in `90011-90098` and a `_scenario_id` label.
 Each offence carries a `_raw_alert` block preserving the original
 vendor-specific schema (Proofpoint TAP, Defender for Endpoint,
 CrowdStrike Falcon, Zscaler ZIA, Entra ID, Eclypsium, Purview, WAF,
@@ -414,6 +414,50 @@ carries the realistic recon labels instead of the default
 `Sophisticated-Test` tag. Each carries 4 typed IOCs
 (`source_ip` / `destination_ip` / `user` / `process`) including the
 load-bearing `am_name: "user"` artifact that triggers Entity Agent.
+
+#### Batch 5 — public-TI-confirmed IOCs (ENRICH-A through ENRICH-E, 5 offences)
+
+The **positive-path complement** to the DEMO batch — where DEMO
+deliberately uses synthetic IOCs that public TI sources can't enrich
+(so the enrichment-bypass detector has positive test cases), ENRICH
+uses **real, well-documented, historical IOCs** that AlienVault OTX /
+abuse.ch / VirusTotal / GreyNoise / TorProject reliably tag.
+
+Every ENRICH IOC carries a `pattern: "ti_*"` tag — the discriminator
+that tells downstream consumers "round-trip this to public TI" vs
+DEMO's `synthetic_*` tags that mean "short-circuit, don't waste a
+public lookup."
+
+| `_scenario_id` | offence ID | Theme                                        | Key IOCs (with `pattern` tag)                                                                 | Expected verdict / disposition                            |
+| -------------- | ---------- | -------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| **ENRICH-A**   | 90094      | WannaCry ransomware (historical)             | `ti_known_wannacry` SHA-256 `ed01ebfb…b9faaaaa` + `ti_known_wannacry_killswitch` kill-switch domain | `MALICIOUS_CONFIRMED` / `true_positive_confirmed` (SEV1)  |
+| **ENRICH-B**   | 90095      | Stuxnet C2 callback (historical)             | `ti_known_stuxnet` × 2: `mypremierfutbol.com` + `todaysfutbol.com` (sinkholed since 2010)     | `MALICIOUS_CONFIRMED` / `true_positive_confirmed_historical` (SEV1) |
+| **ENRICH-C**   | 90096      | EICAR test file (universal positive control) | `ti_eicar_test` SHA-256 `275a021b…f651fd0f` + matching MD5 — every AV identifies              | `MALICIOUS_CONFIRMED` / `true_positive_benign_test` (SEV4) |
+| **ENRICH-D**   | 90097      | Outbound to confirmed Tor exit               | `ti_tor_exit_real` IP in `185.220.101.0/24` (TorProject directory + GreyNoise tag)            | `SUSPICIOUS` / `true_positive_requires_review` (SEV2)     |
+| **ENRICH-E**   | 90098      | Inbound from documented benign scanner       | `ti_known_scanner` IP `71.6.146.185` (GreyNoise: Shodan-affiliated mass scanner)              | `BENIGN_AUTHORIZED` / `false_positive_scanner_noise` (SEV5) |
+
+Each scenario lists `expected_ti_sources` (e.g.
+`["VirusTotal", "AlienVault OTX", "ThreatFox", "MalwareBazaar"]`) —
+the test contract is that the enrichment agent should round-trip to
+those sources and receive positive attribution. Verdicts span the
+full disposition spectrum (`MALICIOUS_CONFIRMED` × 3 / `SUSPICIOUS` /
+`BENIGN_AUTHORIZED`) so the entire enrichment-to-disposition pipeline
+is exercised, not just the malicious path.
+
+**Pattern legend — the bypass-vs-enrich routing key:**
+
+| Prefix         | Meaning                                                | Batches using it       | Enrichment behaviour       |
+| -------------- | ------------------------------------------------------ | ---------------------- | -------------------------- |
+| `synthetic_*`  | Synthetic placeholder (no real-world TI attribution)   | DEMO-A through DEMO-G  | Short-circuit, return `synthetic_fixture` |
+| `rfc5737_*`    | Synthetic — RFC 5737 documentation IPs                  | DEMO scenarios          | Short-circuit               |
+| `netbios_*`    | Synthetic — NetBIOS-shape internal names                | DEMO scenarios          | Short-circuit               |
+| `fictional`    | Synthetic — fabricated domain                           | DEMO scenarios          | Short-circuit               |
+| `placeholder_*`| Synthetic — placeholder file hashes                     | DEMO scenarios          | Short-circuit               |
+| `ti_*`         | **Real public-TI-attributable** — should round-trip    | ENRICH-A through ENRICH-E | Full enrichment             |
+| `tor_exit_*`   | Tor exit node                                           | DEMO-H, ENRICH-D       | Enrich (TorProject + GreyNoise) |
+| `authorized_pentest_*` | Authorized internal pentest actor               | HASHIR-A through HASHIR-C | Cross-reference with related_incidents |
+| `internal_corp_*` | Internal corp address ranges                        | HASHIR scenarios        | Skip external TI (internal-only) |
+| `recon_tool`   | Known recon tool (nmap, masscan, ...)                   | HASHIR scenarios        | Tool-attribution lookup    |
 
 The full scenario corpus lives in `siemulator/scenarios.py` — JSON-defined
 payloads parsed once at import. Add your own by extending the registry
@@ -671,7 +715,7 @@ siemulator/
 ├── logscale.py     # /logscale/* — Humio REST shape
 ├── qradar.py       # /qradar/* — QRadar offences + Ariel
 ├── templates.py    # 6 detection templates + HOSTNAMES + USERS pool
-├── scenarios.py    # 33 multi-source attack narratives
+├── scenarios.py    # 38 multi-source attack narratives
 ├── ui.py           # Single-page web UI at / (inlined HTML/CSS/JS)
 ├── access_log.py   # Middleware + /api/access-log endpoints
 ├── fault_inject.py # Chaos engineering — middleware + /api/faults
