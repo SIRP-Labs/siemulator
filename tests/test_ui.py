@@ -100,3 +100,10 @@ def test_ui_links_to_github_and_docs():
     body = _client().get("/").text
     assert "github.com/SIRP-Labs/siemulator" in body
     assert 'href="/docs"' in body
+
+
+def test_ui_links_to_ingestion_guide():
+    """Pin the link to docs/ingestion-guide.md so it stays discoverable
+    from the live demo without code changes."""
+    body = _client().get("/").text
+    assert "docs/ingestion-guide.md" in body

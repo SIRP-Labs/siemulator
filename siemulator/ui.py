@@ -296,6 +296,7 @@ _HTML_TEMPLATE = """<!doctype html>
   </p>
   <div class="links">
     <a class="primary" href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub ↗</a>
+    <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide ↗</a>
     <a href="/docs" target="_blank">OpenAPI docs</a>
     <a href="{ls}/api/v1/status">{ls}/api/v1/status</a>
     <a href="{qr}/api/help">{qr}/api/help</a>

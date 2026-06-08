@@ -38,6 +38,7 @@ endpoints interactively, and copy curl snippets — try the live demo at
   - [Detection templates (MITRE ATT&CK mapped)](#detection-templates-mitre-attck-mapped)
   - [Multi-source attack scenarios](#multi-source-attack-scenarios)
 - [Use as a test fixture](#use-as-a-test-fixture)
+- [Wire it into your SIEM / SOAR](#wire-it-into-your-siem--soar)
 - [Debug endpoints](#debug-endpoints)
 - [Safety markers](#safety-markers)
 - [Architecture](#architecture)
@@ -423,6 +424,20 @@ curl -H "SEC: qradar-dev-token" "http://localhost:8080/qradar/api/siem/offenses?
   | jq '.[] | {id, _scenario_id, description}'
 docker stop siem
 ```
+
+## Wire it into your SIEM / SOAR
+
+For pointing a real SOAR (Cortex XSOAR, Splunk SOAR, IBM Resilient),
+SIEM (Splunk Enterprise, Microsoft Sentinel, Elastic), or workflow
+tool (Tines, n8n) at siemulator for ingestion testing, see
+**[docs/ingestion-guide.md](docs/ingestion-guide.md)** — copy-paste
+recipes for the common platforms plus the patterns that apply across
+all of them (auth-channel choice, polling cadence, scenario-dedup,
+verification, going-to-production checklist).
+
+The live demo at https://siemulator-y7uhf.ondigitalocean.app lets you
+validate the integration end-to-end before deploying your own
+instance.
 
 ## Debug endpoints
 
