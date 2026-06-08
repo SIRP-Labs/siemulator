@@ -10,10 +10,12 @@ from siemulator.config import (
     access_log_enabled,
     logscale_prefix,
     qradar_prefix,
+    splunk_prefix,
     ui_enabled,
 )
 from siemulator.logscale import build_router as build_logscale_router
 from siemulator.qradar import build_router as build_qradar_router
+from siemulator.splunk import build_router as build_splunk_router
 
 
 def create_app() -> FastAPI:
@@ -56,9 +58,12 @@ def create_app() -> FastAPI:
 
     app.include_router(build_logscale_router())
     app.include_router(build_qradar_router())
+    app.include_router(build_splunk_router())
+
+    bound_prefixes = (logscale_prefix(), qradar_prefix(), splunk_prefix())
 
     # Fault injection — middleware for malformed-JSON path, dependency
-    # already wired into both routers for status / latency injection.
+    # already wired into all three routers for status / latency injection.
     # Always mount the admin router so /api/faults works regardless of
     # whether env-defaults are enabled (per-request overrides + live
     # admin updates work either way).
@@ -71,7 +76,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         MalformedResponseMiddleware,
-        bound_prefixes=(logscale_prefix(), qradar_prefix()),
+        bound_prefixes=bound_prefixes,
     )
     app.include_router(build_faults_router())
 
@@ -84,7 +89,7 @@ def create_app() -> FastAPI:
 
         app.add_middleware(
             AccessLogMiddleware,
-            bound_prefixes=(logscale_prefix(), qradar_prefix()),
+            bound_prefixes=bound_prefixes,
         )
         app.include_router(build_access_log_router())
 

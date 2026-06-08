@@ -15,6 +15,10 @@ def qradar_token() -> str:
     return os.environ.get("SIEMULATOR_QRADAR_TOKEN", "qradar-dev-token")
 
 
+def splunk_token() -> str:
+    return os.environ.get("SIEMULATOR_SPLUNK_TOKEN", "splunk-dev-token")
+
+
 def admin_key() -> str:
     """Admin key for /_debug/* endpoints. Empty string disables them."""
     return os.environ.get("SIEMULATOR_ADMIN_KEY", "")
@@ -26,6 +30,10 @@ def logscale_prefix() -> str:
 
 def qradar_prefix() -> str:
     return os.environ.get("SIEMULATOR_QRADAR_PREFIX", "/qradar")
+
+
+def splunk_prefix() -> str:
+    return os.environ.get("SIEMULATOR_SPLUNK_PREFIX", "/splunk")
 
 
 def host() -> str:
