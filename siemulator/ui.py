@@ -46,6 +46,7 @@ def build_router() -> APIRouter:
         qradar_prefix=qradar_prefix(),
         splunk_prefix=splunk_prefix(),
         scenario_count=scenario_count,
+        scenario_count_minus_one=scenario_count - 1,
         scenario_group_count=scenario_group_count,
         template_count=template_count,
     )
@@ -65,6 +66,7 @@ def _render(
     qradar_prefix: str,
     splunk_prefix: str,
     scenario_count: int,
+    scenario_count_minus_one: int,
     scenario_group_count: int,
     template_count: int,
 ) -> str:
@@ -76,6 +78,7 @@ def _render(
         qr=qradar_prefix,
         sp=splunk_prefix,
         scenario_count=scenario_count,
+        scenario_count_minus_one=scenario_count_minus_one,
         scenario_group_count=scenario_group_count,
         template_count=template_count,
     )
@@ -556,35 +559,195 @@ _HTML_TEMPLATE = """<!doctype html>
     .hero-tagline {{ font-size: 18px; }}
     .stat .value {{ font-size: 24px; }}
   }}
+
+  /* ── Hero split (text left, JSON preview right) ────────── */
+  .hero-split {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+    margin-bottom: 32px;
+  }}
+  @media (max-width: 900px) {{
+    .hero-split {{ grid-template-columns: 1fr; gap: 28px; }}
+  }}
+
+  /* ── Shields.io badges row ─────────────────────────────── */
+  .hero-shields {{
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin: 16px 0 0;
+    align-items: center;
+  }}
+  .hero-shields img {{
+    display: block; height: 22px; border-radius: 4px;
+    opacity: 0.95;
+    transition: opacity 0.15s, transform 0.1s;
+  }}
+  .hero-shields a:hover img {{ opacity: 1; transform: translateY(-1px); }}
+
+  /* ── Hero JSON preview card ────────────────────────────── */
+  .hero-preview {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.45),
+      0 0 0 1px rgba(88,166,255,0.06);
+  }}
+  .preview-header {{
+    background: var(--bg-elev);
+    padding: 10px 16px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border);
+    font: 12px var(--mono);
+  }}
+  .preview-dots {{ display: inline-flex; gap: 6px; }}
+  .preview-dots span {{
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--border);
+  }}
+  .preview-dots span:nth-child(1) {{ background: #f85149; }}
+  .preview-dots span:nth-child(2) {{ background: #d29922; }}
+  .preview-dots span:nth-child(3) {{ background: #3fb950; }}
+  .preview-header .method {{ color: var(--accent); font-weight: 600; }}
+  .preview-header .url {{
+    color: var(--text-dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1;
+  }}
+  .preview-header .status {{
+    background: rgba(63,185,80,0.15);
+    color: var(--green);
+    padding: 2px 9px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }}
+  .preview-body {{
+    margin: 0; padding: 18px 20px;
+    font: 12.5px/1.6 var(--mono);
+    color: var(--text);
+    overflow-x: auto;
+    max-height: 380px;
+  }}
+  .preview-body .k {{ color: var(--accent); }}
+  .preview-body .s {{ color: var(--green); }}
+  .preview-body .n {{ color: var(--orange); }}
+  .preview-body .b {{ color: var(--purple); }}
+  .preview-body .m {{ color: var(--text-soft); font-style: italic; }}
+
+  /* ── How-it-works SVG diagram ──────────────────────────── */
+  .how-svg {{
+    display: block;
+    width: 100%;
+    max-width: 900px;
+    height: auto;
+    margin: 8px auto 16px;
+  }}
+  .how-svg .arrow-stroke {{ stroke: #58a6ff; stroke-width: 1.5; fill: none; }}
+  .how-svg .consumer-rect {{ fill: #161b22; stroke: #58a6ff; stroke-width: 1.5; }}
+  .how-svg .surface-rect {{ fill: #161b22; stroke: #30363d; stroke-width: 1; }}
+  .how-svg .lib-rect {{ fill: #161b22; stroke: #a371f7; stroke-width: 1.5; }}
+  .how-svg .label-primary {{ fill: #e6edf3; font-weight: 600; }}
+  .how-svg .label-accent {{ fill: #3fb950; font-family: ui-monospace, monospace; font-weight: 600; }}
+  .how-svg .label-purple {{ fill: #a371f7; font-weight: 700; }}
+  .how-svg .label-sub {{ fill: #8b949e; }}
+  .knobs-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }}
+  .knob-group {{
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 14px 18px;
+  }}
+  .knob-group h4 {{
+    margin: 0 0 10px;
+    font-size: 11px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600;
+  }}
+  .knob-group ul {{ margin: 0; padding: 0; list-style: none; }}
+  .knob-group li {{
+    padding: 4px 0;
+    font: 12px var(--mono); color: var(--text-dim);
+  }}
+  .knob-group li strong {{ color: var(--accent); font-weight: 600; }}
 </style>
 </head>
 <body>
 <div class="container">
 
 <header class="hero-v2">
-  <div class="hero-title">
-    <h1>siemulator</h1>
-    <span class="badge">v{version}</span>
-    <span class="badge" style="color:var(--green)">● live demo</span>
-    <span class="badge" style="color:var(--purple)">MIT</span>
-  </div>
-  <p class="hero-tagline">
-    The mock SIEM for SOAR &amp; agent integration testing.
-  </p>
-  <p class="hero-sub">
-    Real-vendor REST shapes for <strong>Falcon LogScale</strong>,
-    <strong>IBM QRadar</strong>, and <strong>Splunk Enterprise</strong>.
-    <strong>{scenario_count} multi-source attack scenarios</strong> with
-    stable offence IDs so dedup-by-ID survives replays. Chaos engineering,
-    record/replay/diff, real-time SSE push. Zero customer data — every
-    response carries <code>x-mock-source: siemulator</code> so consumers
-    can fail closed.
-  </p>
-  <div class="hero-actions">
-    <a class="primary" href="#quickstart">▶ Try the live demo</a>
-    <a href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub ↗</a>
-    <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide ↗</a>
-    <a href="/docs" target="_blank">OpenAPI</a>
+  <div class="hero-split">
+    <div class="hero-content">
+      <div class="hero-title">
+        <h1>siemulator</h1>
+        <span class="badge">v{version}</span>
+        <span class="badge" style="color:var(--green)">● live demo</span>
+      </div>
+      <p class="hero-tagline">
+        Stop spinning up real SIEMs for integration tests.
+      </p>
+      <p class="hero-sub">
+        Synthetic SIEM data in three real-vendor shapes
+        (<strong>Falcon LogScale</strong>, <strong>IBM QRadar</strong>,
+        <strong>Splunk Enterprise</strong>) with the chaos-engineering and
+        regression-testing primitives you actually need.
+        <strong>{scenario_count} multi-source attack scenarios</strong>,
+        record/replay/diff, real-time SSE push. Zero customer data —
+        every response carries <code>x-mock-source: siemulator</code>.
+      </p>
+      <div class="hero-actions">
+        <a class="primary" href="#try-it">▶ Try the live demo</a>
+        <a href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub ↗</a>
+        <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide ↗</a>
+        <a href="/docs" target="_blank">OpenAPI</a>
+      </div>
+      <div class="hero-shields">
+        <a href="https://github.com/SIRP-Labs/siemulator/actions" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/github/actions/workflow/status/SIRP-Labs/siemulator/ci.yml?branch=main&amp;label=tests&amp;style=flat-square&amp;logo=githubactions&amp;logoColor=white" alt="CI build status">
+        </a>
+        <a href="https://github.com/SIRP-Labs/siemulator/blob/main/LICENSE" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License">
+        </a>
+        <a href="https://github.com/SIRP-Labs/siemulator/stargazers" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/github/stars/SIRP-Labs/siemulator?style=flat-square&amp;logo=github&amp;label=stars" alt="GitHub stars">
+        </a>
+        <a href="https://github.com/SIRP-Labs/siemulator/pkgs/container/siemulator" target="_blank" rel="noopener">
+          <img src="https://img.shields.io/badge/ghcr.io-sirp--labs%2Fsiemulator-blue?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="GHCR image">
+        </a>
+      </div>
+    </div>
+    <div class="hero-preview" aria-label="Sample API response">
+      <div class="preview-header">
+        <span class="preview-dots"><span></span><span></span><span></span></span>
+        <span class="method">GET</span>
+        <span class="url">{qr}/api/siem/offenses?scenarios=replay</span>
+        <span class="status">200 OK</span>
+      </div>
+<pre class="preview-body"><span class="m">// One of {scenario_count} scenarios — stable IDs survive replays</span>
+[
+  {{
+    <span class="k">"id"</span>: <span class="n">90011</span>,
+    <span class="k">"offense_id"</span>: <span class="n">90011</span>,
+    <span class="k">"_scenario_id"</span>: <span class="s">"S1"</span>,
+    <span class="k">"description"</span>: <span class="s">"Living-off-the-Land Supply Chain — Proofpoint"</span>,
+    <span class="k">"severity"</span>: <span class="n">5</span>,
+    <span class="k">"start_time"</span>: <span class="n">1780839721000</span>,
+    <span class="k">"categories"</span>: [<span class="s">"S1"</span>, <span class="s">"Sophisticated-Test"</span>],
+    <span class="k">"_raw_alert"</span>: {{
+      <span class="k">"source"</span>: <span class="s">"Proofpoint TAP"</span>,
+      <span class="k">"event_type"</span>: <span class="s">"MessagesDelivered"</span>,
+      <span class="k">"timestamp"</span>: <span class="s">"2026-05-22T08:14:22Z"</span>
+    }},
+    <span class="k">"x-mock-source"</span>: <span class="s">"siemulator"</span>
+  }},
+  <span class="m">// + {scenario_count_minus_one} more</span>
+]</pre>
+    </div>
   </div>
   <div class="stats-grid">
     <div class="stat accent">
@@ -654,19 +817,67 @@ _HTML_TEMPLATE = """<!doctype html>
 <section>
   <h2>How it works</h2>
   <p>One process, three surface mounts, one shared scenario library. No external dependencies. <code>pip install</code> or <code>docker run</code> and you're done.</p>
-  <div class="how-diagram"><span class="label">Your consumer</span>          <span class="arrow">─────►</span>  <span class="surface">/logscale/* </span> <span class="label">(Humio REST)</span>     <span class="arrow">┐</span>
-<span class="label">(SOAR / agent / CI test)</span>            <span class="surface">/qradar/*   </span> <span class="label">(IBM REST)</span>       <span class="arrow">├──►</span> <span class="box">Scenario library</span>
-                              <span class="surface">/splunk/*   </span> <span class="label">(Splunk REST)</span>    <span class="arrow">┘</span>     <span class="box">({scenario_count} scenarios · {template_count} templates)</span>
+  <svg class="how-svg" viewBox="0 0 880 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture diagram">
+    <defs>
+      <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M 0 0 L 8 3 L 0 6 z" fill="#58a6ff"/>
+      </marker>
+    </defs>
 
-<span class="label">Three knobs at every layer:</span>
-  <span class="arrow">▸</span> Auth   <span class="label">Authorization: Bearer | SEC | ?token= (cross-acceptance)</span>
-  <span class="arrow">▸</span> Mode   <span class="label">?scenarios=all|batch|replay|mix (one-shot dedup default)</span>
-  <span class="arrow">▸</span> Faults <span class="label">?inject_status=NNN | ?inject_latency=MS | ?inject_malformed=1</span>
+    <!-- Consumer box -->
+    <rect class="consumer-rect" x="20" y="100" width="180" height="80" rx="10"/>
+    <text class="label-primary" x="110" y="135" text-anchor="middle" font-size="14">Your consumer</text>
+    <text class="label-sub" x="110" y="156" text-anchor="middle" font-size="11">SOAR · agent · CI</text>
 
-<span class="label">Per-request meta-channels:</span>
-  <span class="arrow">▸</span> Replay   <span class="label">?replay_from=&lt;session&gt;  → serve a captured response verbatim</span>
-  <span class="arrow">▸</span> Capture  <span class="label">POST /api/sessions/&lt;name&gt;/start (admin)  → record everything</span>
-  <span class="arrow">▸</span> Observe  <span class="label">GET  /api/access-log/stats (admin)         → who consumed what</span></div>
+    <!-- Arrows consumer → 3 surfaces -->
+    <path class="arrow-stroke" d="M 200 130 Q 240 60 290 60" marker-end="url(#arrowhead)"/>
+    <path class="arrow-stroke" d="M 200 140 L 290 140" marker-end="url(#arrowhead)"/>
+    <path class="arrow-stroke" d="M 200 150 Q 240 220 290 220" marker-end="url(#arrowhead)"/>
+
+    <!-- 3 surface boxes -->
+    <rect class="surface-rect" x="295" y="30" width="220" height="60" rx="8"/>
+    <text class="label-accent" x="405" y="55" text-anchor="middle" font-size="14">/logscale/*</text>
+    <text class="label-sub" x="405" y="74" text-anchor="middle" font-size="11">Falcon LogScale · Humio REST</text>
+
+    <rect class="surface-rect" x="295" y="110" width="220" height="60" rx="8"/>
+    <text class="label-accent" x="405" y="135" text-anchor="middle" font-size="14">/qradar/*</text>
+    <text class="label-sub" x="405" y="154" text-anchor="middle" font-size="11">IBM QRadar · offences + Ariel</text>
+
+    <rect class="surface-rect" x="295" y="190" width="220" height="60" rx="8"/>
+    <text class="label-accent" x="405" y="215" text-anchor="middle" font-size="14">/splunk/*</text>
+    <text class="label-sub" x="405" y="234" text-anchor="middle" font-size="11">Splunk Enterprise · REST search</text>
+
+    <!-- Arrows surfaces → library -->
+    <path class="arrow-stroke" d="M 515 60 Q 580 100 625 130" marker-end="url(#arrowhead)"/>
+    <path class="arrow-stroke" d="M 515 140 L 625 140" marker-end="url(#arrowhead)"/>
+    <path class="arrow-stroke" d="M 515 220 Q 580 180 625 150" marker-end="url(#arrowhead)"/>
+
+    <!-- Library box -->
+    <rect class="lib-rect" x="630" y="80" width="230" height="120" rx="12"/>
+    <text class="label-purple" x="745" y="115" text-anchor="middle" font-size="14">Scenario library</text>
+    <text class="label-primary" x="745" y="142" text-anchor="middle" font-size="15" font-weight="700">{scenario_count} scenarios</text>
+    <text class="label-primary" x="745" y="162" text-anchor="middle" font-size="13">{template_count} detection templates</text>
+    <text class="label-sub" x="745" y="184" text-anchor="middle" font-size="11">MITRE ATT&amp;CK mapped</text>
+  </svg>
+
+  <div class="knobs-grid">
+    <div class="knob-group">
+      <h4>Three knobs at every layer</h4>
+      <ul>
+        <li><strong>Auth</strong>  Bearer · SEC · ?token=</li>
+        <li><strong>Mode</strong>  ?scenarios=all|batch|replay|mix</li>
+        <li><strong>Faults</strong>  ?inject_status / ?inject_latency / ?inject_malformed</li>
+      </ul>
+    </div>
+    <div class="knob-group">
+      <h4>Per-request meta-channels</h4>
+      <ul>
+        <li><strong>Replay</strong>  ?replay_from=&lt;session&gt;</li>
+        <li><strong>Capture</strong>  POST /api/sessions/&lt;name&gt;/start</li>
+        <li><strong>Observe</strong>  GET /api/access-log/stats</li>
+      </ul>
+    </div>
+  </div>
 </section>
 
 <section>
@@ -738,7 +949,7 @@ _HTML_TEMPLATE = """<!doctype html>
   <pre class="code"><button class="copy" onclick="copyCode(this)">copy</button><span id="curl-sp"></span></pre>
 </section>
 
-<section>
+<section id="try-it">
   <h2>Try it <span class="count">live against this host</span></h2>
   <p>Runs same-origin against the API you're already looking at. No CORS, no relay.</p>
   <div class="row">
