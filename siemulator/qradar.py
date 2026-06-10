@@ -42,6 +42,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from siemulator.advisory import get_advisory_offenses
 from siemulator.config import MOCK_SOURCE, admin_key, logscale_token, qradar_prefix, qradar_token
 from siemulator.fault_inject import fault_check
 from siemulator.scenarios import all_scenarios_as_qradar
@@ -323,6 +324,12 @@ def _make_router(prefix: str) -> APIRouter:
             _record_request(request, "scenarios=replay", out)
             return out
 
+        if scenarios == "advisory":
+            out = get_advisory_offenses()
+            response.headers["X-Mock-Advisory-Count"] = str(len(out))
+            _record_request(request, f"scenarios=advisory(count={len(out)})", out)
+            return out
+
         rng = request.headers.get("Range", "")
         n = 5
         if rng.startswith("items="):
@@ -333,7 +340,7 @@ def _make_router(prefix: str) -> APIRouter:
                 pass
         out = build_offenses(n)
         if scenarios == "mix":
-            out = all_scenarios_as_qradar() + out
+            out = all_scenarios_as_qradar() + get_advisory_offenses() + out
         _record_request(request, f"default(n={len(out)})", out)
         return out
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from siemulator import __version__
+from siemulator.advisory import build_router as build_advisory_router
 from siemulator.config import (
     MOCK_SOURCE,
     access_log_enabled,
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
         async def root():
             return _METADATA
 
+    app.include_router(build_advisory_router())
     app.include_router(build_logscale_router())
     app.include_router(build_qradar_router())
     app.include_router(build_splunk_router())
