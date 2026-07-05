@@ -300,10 +300,19 @@ def _make_router(prefix: str) -> APIRouter:
         _check_auth(request)
         _stamp(response)
 
+        # ``?scenarios=all`` bakes in 500 random-shape extras by default
+        # so a single poll yields 52 curated + 500 noise = 552 alerts.
+        # Callers wanting a bare scenario batch pass ``extras=0`` explicitly.
+        _DEFAULT_EXTRAS_FOR_ALL = 500
+
         def _extras_tail() -> list[dict]:
-            if not extras or extras <= 0:
+            if extras is None:
+                n = _DEFAULT_EXTRAS_FOR_ALL if scenarios == "all" else 0
+            else:
+                n = int(extras)
+            if n <= 0:
                 return []
-            return build_offenses(min(int(extras), 1000))
+            return build_offenses(min(n, 1000))
 
         if scenarios == "all":
             full = all_scenarios_as_qradar()

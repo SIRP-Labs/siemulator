@@ -40,9 +40,11 @@ def test_scenarios_endpoint_direct(qradar_client):
 
 
 def test_scenarios_via_query_param(qradar_client):
-    """``?scenarios=all`` on /api/siem/offenses returns all 48 scenarios."""
+    """``?scenarios=all`` returns all 52 curated + 500 random noise by default."""
     c = qradar_client(token="stok")
-    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all")
+    from siemulator.qradar import _SCENARIOS_SERVED
+    _SCENARIOS_SERVED.clear()
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=0")
     assert r.status_code == 200
     assert len(r.json()) == 52
 
@@ -605,12 +607,23 @@ def test_scenarios_batch_with_extras(qradar_client):
     assert len(items) == 6
 
 
-def test_scenarios_all_without_extras_unchanged(qradar_client):
+def test_scenarios_all_default_bakes_in_500_extras(qradar_client):
     from siemulator.qradar import _SCENARIOS_SERVED
     _SCENARIOS_SERVED.clear()
-    """Regression: plain ``?scenarios=all`` still returns exactly the
-    curated pool, no extras appended."""
+    """``?scenarios=all`` with no extras= param bakes in 500 random
+    offences by default — one poll returns 52 curated + 500 noise = 552."""
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all")
+    items = r.json()
+    assert len(items) == 52 + 500
+
+
+def test_scenarios_all_extras_zero_returns_bare_curated(qradar_client):
+    from siemulator.qradar import _SCENARIOS_SERVED
+    _SCENARIOS_SERVED.clear()
+    """``?scenarios=all&extras=0`` opts out of the default 500 noise,
+    returning just the curated pool."""
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=0")
     items = r.json()
     assert len(items) == 52
