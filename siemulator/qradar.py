@@ -279,6 +279,7 @@ def _make_router(prefix: str) -> APIRouter:
         fields: str | None = None,
         sort: str | None = None,
         scenarios: str | None = None,
+        extras: int | None = None,
     ):
         """List active offences.
 
@@ -289,38 +290,56 @@ def _make_router(prefix: str) -> APIRouter:
           - ``?scenarios=batch``: rotate one scenario per call.
           - ``?scenarios=replay``: all scenarios ignoring dedup.
           - ``?scenarios=mix``: scenarios + synthetic templates.
+
+        Extras:
+          - ``?extras=<N>``: append N randomised synthetic offences to the
+            response (capped at 50). Works with ``scenarios=all|batch|replay``.
+            Randomised offences are drawn from ``ALERT_TEMPLATES`` with
+            per-call randomised host / user / IP / offence_id.
         """
         _check_auth(request)
         _stamp(response)
+
+        def _extras_tail() -> list[dict]:
+            if not extras or extras <= 0:
+                return []
+            return build_offenses(min(int(extras), 50))
 
         if scenarios == "all":
             full = all_scenarios_as_qradar()
             fresh = [s for s in full if s.get("offense_id") not in _SCENARIOS_SERVED]
             for s in fresh:
                 _SCENARIOS_SERVED.add(s.get("offense_id"))
+            tail = _extras_tail()
+            out = fresh + tail
             response.headers["X-Mock-Scenarios-Served-Total"] = str(len(_SCENARIOS_SERVED))
             response.headers["X-Mock-Scenarios-Returned"] = str(len(fresh))
             response.headers["X-Mock-Scenarios-Pool-Size"] = str(len(full))
+            response.headers["X-Mock-Extras-Appended"] = str(len(tail))
             _record_request(
                 request,
-                f"scenarios=all(returned={len(fresh)},served={len(_SCENARIOS_SERVED)}/{len(full)})",
-                fresh,
+                f"scenarios=all(returned={len(fresh)},served={len(_SCENARIOS_SERVED)}/{len(full)},extras={len(tail)})",
+                out,
             )
-            return fresh
+            return out
 
         if scenarios == "batch":
             full = all_scenarios_as_qradar()
             idx = _SCENARIO_ROTATION_STATE["next"] % len(full)
             _SCENARIO_ROTATION_STATE["next"] = idx + 1
-            out = [full[idx]]
+            tail = _extras_tail()
+            out = [full[idx]] + tail
             response.headers["X-Mock-Scenario-Index"] = f"{idx + 1}/{len(full)}"
             response.headers["X-Mock-Scenario-Id"] = str(full[idx].get("offense_id"))
-            _record_request(request, f"scenarios=batch({idx + 1}/{len(full)})", out)
+            response.headers["X-Mock-Extras-Appended"] = str(len(tail))
+            _record_request(request, f"scenarios=batch({idx + 1}/{len(full)},extras={len(tail)})", out)
             return out
 
         if scenarios == "replay":
-            out = all_scenarios_as_qradar()
-            _record_request(request, "scenarios=replay", out)
+            tail = _extras_tail()
+            out = all_scenarios_as_qradar() + tail
+            response.headers["X-Mock-Extras-Appended"] = str(len(tail))
+            _record_request(request, f"scenarios=replay(extras={len(tail)})", out)
             return out
 
         rng = request.headers.get("Range", "")

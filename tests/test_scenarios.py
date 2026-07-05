@@ -561,3 +561,56 @@ def test_v6_literal_field_values_preserved():
     dns_c2 = by_sid["DNS-C2-A"]["_raw_alert"]["parsed"]
     assert dns_c2["misc_queried_domain"] == "cobaltstrike-c2-known.badactor.example"
     assert dns_c2["cardinality_signals"]["queries_observed_last_60s"] == 1
+
+
+# ── ?extras=<N> — appends N randomised synthetic offences ──────────
+
+
+def test_scenarios_all_with_extras_appends_random(qradar_client):
+    from siemulator.qradar import _SCENARIOS_SERVED
+    _SCENARIOS_SERVED.clear()
+    """``?scenarios=all&extras=20`` returns the 52 curated + 20 random
+    synthetic offences in a single poll. Randomised offences are drawn
+    from ALERT_TEMPLATES with per-call random host / user / IP /
+    offence_id — they're noise to fill the pool, not test fixtures."""
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=20")
+    assert r.status_code == 200
+    items = r.json()
+    assert len(items) == 52 + 20
+    # Curated 52 come first, extras tail after
+    curated = [i for i in items if 90_010 < i["id"] < 90_120]
+    extras = [i for i in items if i["id"] > 30_000 and i["id"] < 30_000_000 and not (90_010 < i["id"] < 90_120)]
+    assert len(curated) == 52
+    assert len(extras) == 20
+    # The extras carry x-mock-source but no _scenario_id (they're not curated scenarios)
+    assert all(e.get("_scenario_id") is None for e in extras)
+
+
+def test_scenarios_all_extras_cap(qradar_client):
+    from siemulator.qradar import _SCENARIOS_SERVED
+    _SCENARIOS_SERVED.clear()
+    """extras is capped at 50 — larger values silently truncate."""
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=999")
+    items = r.json()
+    assert len(items) == 52 + 50
+
+
+def test_scenarios_batch_with_extras(qradar_client):
+    """``?scenarios=batch&extras=5`` returns 1 rotated scenario + 5 random."""
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=batch&extras=5")
+    items = r.json()
+    assert len(items) == 6
+
+
+def test_scenarios_all_without_extras_unchanged(qradar_client):
+    from siemulator.qradar import _SCENARIOS_SERVED
+    _SCENARIOS_SERVED.clear()
+    """Regression: plain ``?scenarios=all`` still returns exactly the
+    curated pool, no extras appended."""
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all")
+    items = r.json()
+    assert len(items) == 52
