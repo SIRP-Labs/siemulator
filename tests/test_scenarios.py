@@ -434,3 +434,130 @@ def test_enrich_vs_demo_pattern_separation():
             assert not ioc["pattern"].startswith("ti_"), (
                 f"{d['_scenario_id']} DEMO should not carry ti_* IOC"
             )
+
+
+# ── v6 SIEM-shape scenarios — _test_meta block for deterministic grading ──
+
+
+def test_v6_scenarios_carry_test_meta():
+    """Every v6 scenario (offence IDs 90101-90114) must carry a top-level
+    `_test_meta` block with test_payload_id / expected_verdict /
+    expected_category_id / expected_guardrails_that_should_fire /
+    expected_vendor_semantics. Faiz uses these to match ingested incidents
+    back to their source payload deterministically rather than guessing
+    from Planner hypothesis text."""
+    from siemulator import scenarios
+
+    out = scenarios.all_scenarios_as_qradar()
+    v6 = [s for s in out if 90101 <= s["id"] <= 90114]
+    assert len(v6) == 14, f"expected 14 v6 scenarios, got {len(v6)}"
+
+    required_keys = {
+        "test_payload_id",
+        "expected_verdict",
+        "expected_category_id",
+        "expected_guardrails_that_should_fire",
+        "expected_vendor_semantics",
+    }
+    for s in v6:
+        raw = s["_raw_alert"]
+        assert "_test_meta" in raw, f"{s['_scenario_id']} missing _test_meta"
+        meta = raw["_test_meta"]
+        missing = required_keys - set(meta.keys())
+        assert not missing, f"{s['_scenario_id']} _test_meta missing keys: {missing}"
+        # test_payload_id must be a stable slug — used as a grep key
+        assert meta["test_payload_id"].startswith("P"), (
+            f"{s['_scenario_id']} test_payload_id must be P<n>_... slug"
+        )
+        # guardrails + vendor semantics must be non-empty lists
+        assert isinstance(meta["expected_guardrails_that_should_fire"], list)
+        assert isinstance(meta["expected_vendor_semantics"], list)
+        assert meta["expected_vendor_semantics"], (
+            f"{s['_scenario_id']} needs at least one vendor semantic"
+        )
+
+
+def test_v6_test_payload_ids_are_unique():
+    """test_payload_id must uniquely identify a scenario — that's what
+    makes cross-referencing an ingested incident to its source payload
+    deterministic."""
+    from siemulator import scenarios
+
+    out = scenarios.all_scenarios_as_qradar()
+    v6 = [s for s in out if 90101 <= s["id"] <= 90114]
+    ids = [s["_raw_alert"]["_test_meta"]["test_payload_id"] for s in v6]
+    assert len(ids) == len(set(ids)), f"duplicate test_payload_ids: {ids}"
+
+
+def test_v6_category_ids_match_guardrail_intent():
+    """Load-bearing category-id pins: negative-tests (never-classify-as-X)
+    must ingest under the correct category so the guardrail actually
+    gets exercised on the right code path."""
+    from siemulator import scenarios
+
+    out = scenarios.all_scenarios_as_qradar()
+    by_sid = {s["_scenario_id"]: s for s in out}
+
+    # TRELLIX-A must ingest as 111 (Endpoint Defense Evasion), NOT 107,
+    # so never_ransomware_without_cat107_encryption is exercised on
+    # the correct category path.
+    assert by_sid["TRELLIX-A"]["_raw_alert"]["expected_iti_category_id"] == 111
+
+    # RANSOM-D (locky.exe filename FP) must ingest as 111, NOT 107 —
+    # the whole point is that filename alone must not classify Ransomware.
+    assert by_sid["RANSOM-D"]["_raw_alert"]["expected_iti_category_id"] == 111
+
+    # RANSOM-A must ingest as 107 (positive Ransomware baseline —
+    # all four required-evidence signals present).
+    assert by_sid["RANSOM-A"]["_raw_alert"]["expected_iti_category_id"] == 107
+
+
+def test_v6_literal_field_values_preserved():
+    """Load-bearing literal strings that specific guardrails match on.
+    Paraphrasing these regresses the test — the guardrail wouldn't
+    fire on a paraphrased shape even though the shape looks right."""
+    from siemulator import scenarios
+
+    out = scenarios.all_scenarios_as_qradar()
+    by_sid = {s["_scenario_id"]: s for s in out}
+
+    trellix_body = by_sid["TRELLIX-A"]["_raw_alert"]["raw_log"]["body"]
+    assert "xagt.exe" in trellix_body
+    assert r"C:\Users\Public\secur32.dll" in trellix_body
+    assert "Host Agent Cert Hash" in trellix_body
+    assert "WORKSTATION-CORPS-04" in trellix_body
+    assert "FireEye" in trellix_body
+
+    win_body = by_sid["WIN-4672"]["_raw_alert"]["raw_log"]["body"]
+    assert "EventID=4672" in win_body
+    assert "PKHBLC5EX-11$" in win_body
+    assert "Domain=CORP" in win_body
+    assert "LogonType=3" in win_body
+    for priv in ("SeSecurityPrivilege", "SeBackupPrivilege",
+                 "SeDebugPrivilege", "SeImpersonatePrivilege"):
+        assert priv in win_body, f"WIN-4672 missing privilege: {priv}"
+
+    ransom_a_parsed = by_sid["RANSOM-A"]["_raw_alert"]["parsed"]
+    assert ransom_a_parsed["file_mass_encryption"] is True
+    assert ransom_a_parsed["shadow_copy_deletion"] is True
+    assert ransom_a_parsed["ransom_note_dropped"] == "READMEDEC.txt"
+
+    ransom_d_parsed = by_sid["RANSOM-D"]["_raw_alert"]["parsed"]
+    assert "locky.exe" in ransom_d_parsed["process"]["filename"]
+    b = ransom_d_parsed["behaviors"]
+    assert b["file_mass_encryption"] is False
+    assert b["shadow_copy_deletion"] is False
+    assert b["ransom_note_dropped"] is None
+    assert b["file_mass_rename"] is False
+
+    benign_body = by_sid["BENIGN-C2-A"]["_raw_alert"]["parsed"]["process"]["cmdline"]
+    assert benign_body == "svchost.exe -k netsvcs -s wuauserv"
+
+    dns_a = by_sid["PA-DNS-A"]["_raw_alert"]["parsed"]
+    assert dns_a["dst"] == "8.8.8.8"
+    assert dns_a["action"] == "sinkhole"
+    assert dns_a["misc_queried_domain"] == "suspicious.malware-family.example"
+
+    dns_c2 = by_sid["DNS-C2-A"]["_raw_alert"]["parsed"]
+    assert dns_c2["misc_queried_domain"] == "cobaltstrike-c2-known.badactor.example"
+    assert dns_c2["cardinality_signals"]["queries_observed_last_60s"] == 1

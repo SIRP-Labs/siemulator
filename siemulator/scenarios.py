@@ -1222,6 +1222,13 @@ _ENRICH_E = _j(r"""
 
 _TRELLIX_A = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P1_trellix_hx_secur32",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 111,
+    "expected_guardrails_that_should_fire": ["never_block_signed_ms_binary", "never_ransomware_without_cat107_encryption"],
+    "expected_vendor_semantics": ["trellix_hx_cef.xagt_exe_is_the_edr", "trellix_hx_cef.secur32_dll_path_semantics", "trellix_hx_cef.host_agent_cert_hash_is_agent_id"]
+  },
   "source": "Trellix HX",
   "event_type": "EDR-Alert",
   "timestamp": "2026-07-05T04:15:22Z",
@@ -1236,7 +1243,7 @@ _TRELLIX_A = _j(r"""
   "raw_log": {
     "format": "CEF",
     "syslog_wrapper": "<134>1 2026-07-05T04:15:22Z hx-collector-01 hx - - -",
-    "body": "CEF:0|FireEye|HX|4.9.0|MPS-BLOCK-Executable|Malicious Signature-Based Detection|10|externalId=EX-12345 cs1Label=Detection Type cs1=EDR Alert cs2Label=Signature Name cs2=SUSPICIOUS_DLL_SIDE_LOADING_1 cs3Label=MITRE Technique cs3=T1574.002 cs4Label=Process Name cs4=xagt.exe cs5Label=Loaded DLL Path cs5=C:\\Users\\Public\\secur32.dll cs6Label=Loaded DLL Hash MD5 cs6=b5c0e18fc4c96c1e3a67feaddbc0d34d flexString1Label=Host Agent Cert Hash flexString1=fa1b8e3c9d7e2a5f8b1c4d7e0f2a3b6c8d9e1f2a4b7c9e0d3f5a8b2c1e4d7f9a suser=admin.user dvc=192.168.5.10 dvchost=WORKSTATION-EX-04"
+    "body": "CEF:0|FireEye|HX|4.9.0|MPS-BLOCK-Executable|Malicious Signature-Based Detection|10|externalId=EX-12345 cs1Label=Detection Type cs1=EDR Alert cs2Label=Signature Name cs2=SUSPICIOUS_DLL_SIDE_LOADING_1 cs3Label=MITRE Technique cs3=T1574.002 cs4Label=Process Name cs4=xagt.exe cs5Label=Loaded DLL Path cs5=C:\\Users\\Public\\secur32.dll cs6Label=Loaded DLL Hash MD5 cs6=b5c0e18fc4c96c1e3a67feaddbc0d34d flexString1Label=Host Agent Cert Hash flexString1=fa1b8e3c9d7e2a5f8b1c4d7e0f2a3b6c8d9e1f2a4b7c9e0d3f5a8b2c1e4d7f9a suser=admin.user dvc=192.168.5.10 dvchost=WORKSTATION-CORPS-04"
   },
   "parsed": {
     "device_vendor": "FireEye",
@@ -1255,7 +1262,7 @@ _TRELLIX_A = _j(r"""
     "host_agent_cert_hash": "fa1b8e3c9d7e2a5f8b1c4d7e0f2a3b6c8d9e1f2a4b7c9e0d3f5a8b2c1e4d7f9a",
     "user": "admin.user",
     "device_ip": "192.168.5.10",
-    "device_host": "WORKSTATION-EX-04"
+    "device_host": "WORKSTATION-CORPS-04"
   },
   "iocs": [
     {"type": "process", "value": "xagt.exe", "pattern": "edr_agent_process",
@@ -1273,7 +1280,7 @@ _TRELLIX_A = _j(r"""
     {"am_name": "process", "am_value": "xagt.exe"},
     {"am_name": "file_path", "am_value": "C:\\Users\\Public\\secur32.dll"},
     {"am_name": "file_hash_md5", "am_value": "b5c0e18fc4c96c1e3a67feaddbc0d34d"},
-    {"am_name": "hostname", "am_value": "WORKSTATION-EX-04"},
+    {"am_name": "hostname", "am_value": "WORKSTATION-CORPS-04"},
     {"am_name": "source_ip", "am_value": "192.168.5.10"},
     {"am_name": "user", "am_value": "admin.user"},
     {"am_name": "mitre_technique", "am_value": "T1574.002"}
@@ -1287,6 +1294,13 @@ _TRELLIX_A = _j(r"""
 
 _WIN_4672 = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P2_qradar_wincollect_4672",
+    "expected_verdict": "VERIFICATION_REQUIRED",
+    "expected_category_id": 118,
+    "expected_guardrails_that_should_fire": ["never_downgrade_sev_without_justification", "cite_full_privilege_list_verbatim"],
+    "expected_vendor_semantics": ["windows_4672.machine_account_trailing_dollar", "windows_4672.logon_type_3_is_network_share", "windows_4672.ex_prefix_is_exchange_server_class", "windows_4672.plugin_version_is_agent_marker_not_ioc"]
+  },
   "source": "QRadar WinCollect",
   "event_type": "WindowsSecurity-4672",
   "timestamp": "2026-07-05T04:30:00Z",
@@ -1301,18 +1315,18 @@ _WIN_4672 = _j(r"""
   "raw_log": {
     "format": "LEEF",
     "syslog_wrapper": "<134>1 2026-07-05T04:30:00Z qradar-collector-01 QRadar - - -",
-    "body": "LEEF:2.0|Microsoft|Windows|10.0|4672|^|devTime=2026-07-05T04:30:00Z^EventID=4672^Computer=EX-DC-01.acme.local^OriginatingComputer=EX-DC-01.acme.local^LogSource=WinCollect_DC01^DeviceType=WindowsAuthServer^Category=Special Logon^sev=6^usrName=EX-DC-01$^Domain=ACME^SecurityID=S-1-5-18^LogonType=3^LogonID=0x3E7^Privileges=SeSecurityPrivilege SeBackupPrivilege SeRestorePrivilege SeTakeOwnershipPrivilege SeDebugPrivilege SeSystemEnvironmentPrivilege SeLoadDriverPrivilege SeImpersonatePrivilege SeDelegateSessionUserImpersonatePrivilege^PluginVersion=7.3.2.55^SourceIP=10.20.30.5"
+    "body": "LEEF:2.0|Microsoft|Windows|10.0|4672|^|devTime=2026-07-05T04:30:00Z^EventID=4672^Computer=PKHBLC5EX-11.corp.local^OriginatingComputer=PKHBLC5EX-11.corp.local^LogSource=WinCollect_DC01^DeviceType=WindowsAuthServer^Category=Special Logon^sev=6^usrName=PKHBLC5EX-11$^Domain=CORP^SecurityID=S-1-5-18^LogonType=3^LogonID=0x3E7^Privileges=SeSecurityPrivilege SeBackupPrivilege SeRestorePrivilege SeTakeOwnershipPrivilege SeDebugPrivilege SeSystemEnvironmentPrivilege SeLoadDriverPrivilege SeImpersonatePrivilege SeDelegateSessionUserImpersonatePrivilege^PluginVersion=7.3.2.55^SourceIP=10.20.30.5"
   },
   "parsed": {
     "device_vendor": "Microsoft",
     "device_product": "Windows",
     "event_id": 4672,
-    "computer": "EX-DC-01.acme.local",
+    "computer": "PKHBLC5EX-11.corp.local",
     "log_source": "WinCollect_DC01",
     "category_raw": "Special Logon",
     "sev": 6,
-    "user_name": "EX-DC-01$",
-    "domain": "ACME",
+    "user_name": "PKHBLC5EX-11$",
+    "domain": "CORP",
     "security_id": "S-1-5-18",
     "logon_type": 3,
     "logon_id": "0x3E7",
@@ -1331,9 +1345,9 @@ _WIN_4672 = _j(r"""
     "source_ip": "10.20.30.5"
   },
   "iocs": [
-    {"type": "user", "value": "EX-DC-01$", "pattern": "machine_account_naming",
+    {"type": "user", "value": "PKHBLC5EX-11$", "pattern": "machine_account_naming",
      "note": "Trailing $ + host-name-shaped user = Windows machine account. Machine accounts holding SeDebugPrivilege is normal for domain controllers + Exchange servers."},
-    {"type": "hostname", "value": "EX-DC-01.acme.local", "pattern": "exchange_server_class_hostname",
+    {"type": "hostname", "value": "PKHBLC5EX-11.corp.local", "pattern": "exchange_server_class_hostname",
      "note": "The EX-DC- prefix marks this as an Exchange server. Class context matters for privilege interpretation."},
     {"type": "ip", "value": "10.20.30.5", "pattern": "internal_corp_source",
      "note": "Internal source IP for the logon — expected for LogonType=3 (network share)."}
@@ -1342,13 +1356,13 @@ _WIN_4672 = _j(r"""
   "expected_iti_category_name": "Privileged Access",
   "expected_iti_attack_severity": "SEV1",
   "expected_artifact_mapping": [
-    {"am_name": "user", "am_value": "EX-DC-01$"},
-    {"am_name": "hostname", "am_value": "EX-DC-01.acme.local"},
+    {"am_name": "user", "am_value": "PKHBLC5EX-11$"},
+    {"am_name": "hostname", "am_value": "PKHBLC5EX-11.corp.local"},
     {"am_name": "source_ip", "am_value": "10.20.30.5"},
     {"am_name": "logon_type", "am_value": "3"},
     {"am_name": "logon_id", "am_value": "0x3E7"},
     {"am_name": "event_id", "am_value": "4672"},
-    {"am_name": "domain", "am_value": "ACME"}
+    {"am_name": "domain", "am_value": "CORP"}
   ],
   "expected_verdict": "VERIFICATION_REQUIRED",
   "expected_disposition": "true_positive_expected_privilege",
@@ -1359,6 +1373,13 @@ _WIN_4672 = _j(r"""
 
 _PA_SMB_A = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P3a_pa_traffic_smb_aged_out",
+    "expected_verdict": "BENIGN_AUTHORIZED",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["never_infer_smb_from_port_alone", "never_contain_on_no_layer7_exchange"],
+    "expected_vendor_semantics": ["palo_alto_traffic.session_end_reason_aged_out_semantics", "palo_alto_traffic.app_incomplete_no_layer7", "palo_alto_traffic.symmetric_140b_2pkt_pattern"]
+  },
   "source": "Palo Alto Networks PAN-OS",
   "event_type": "TRAFFIC-end",
   "timestamp": "2026-07-05T05:12:44Z",
@@ -1436,6 +1457,13 @@ _PA_SMB_A = _j(r"""
 
 _PA_SMB_B = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P3b_pa_traffic_smb_aged_out_tor_dst",
+    "expected_verdict": "SUSPICIOUS",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["composite_flow_shape_plus_enrichment"],
+    "expected_vendor_semantics": ["palo_alto_traffic.session_end_reason_aged_out_semantics", "public_ti.tor_exit_node_enrichment"]
+  },
   "source": "Palo Alto Networks PAN-OS",
   "event_type": "TRAFFIC-end",
   "timestamp": "2026-07-05T05:24:11Z",
@@ -1486,6 +1514,13 @@ _PA_SMB_B = _j(r"""
 
 _RANSOM_A = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P4a_rewterz_ransomware_positive",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 107,
+    "expected_guardrails_that_should_fire": ["propose_destructive_actions_on_confirmed_ransomware", "require_analyst_approval_for_destructive"],
+    "expected_vendor_semantics": ["ransomware_behavior.encryption_signal", "ransomware_behavior.shadow_copy_deletion_signal", "ransomware_behavior.ransom_note_dropped_signal", "ransomware_behavior.c2_callback_signal"]
+  },
   "source": "CrowdStrike Falcon (via OmniStream)",
   "event_type": "RansomwareBehaviorDetection",
   "timestamp": "2026-07-05T05:45:33Z",
@@ -1574,6 +1609,13 @@ _RANSOM_A = _j(r"""
 
 _RANSOM_B = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P4b_ransomware_source_sev_low_floor_test",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 107,
+    "expected_guardrails_that_should_fire": ["cat107_severity_floor_sev2_minimum"],
+    "expected_vendor_semantics": ["ransomware_behavior.encryption_signal", "ransomware_behavior.shadow_copy_deletion_signal", "ransomware_behavior.ransom_note_dropped_signal"]
+  },
   "source": "CrowdStrike Falcon (via OmniStream)",
   "event_type": "RansomwareBehaviorDetection",
   "timestamp": "2026-07-05T05:47:11Z",
@@ -1631,6 +1673,13 @@ _RANSOM_B = _j(r"""
 
 _RANSOM_C = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P4c_ransomware_unjustified_override_revert",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 107,
+    "expected_guardrails_that_should_fire": ["never_downgrade_sev_without_justification", "revert_unjustified_override_and_record"],
+    "expected_vendor_semantics": ["ransomware_behavior.encryption_signal", "ransomware_behavior.shadow_copy_deletion_signal", "ransomware_behavior.ransom_note_dropped_signal"]
+  },
   "source": "CrowdStrike Falcon (via OmniStream)",
   "event_type": "RansomwareBehaviorDetection",
   "timestamp": "2026-07-05T05:49:22Z",
@@ -1690,6 +1739,13 @@ _RANSOM_C = _j(r"""
 
 _PSH_A = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P5a_powershell_legit_admin_no_cosignal",
+    "expected_verdict": "BENIGN_AUTHORIZED",
+    "expected_category_id": 119,
+    "expected_guardrails_that_should_fire": ["shell_process_score_zero_without_cosignal"],
+    "expected_vendor_semantics": ["windows_4688.powershell_bare_no_encoded", "windows_4688.service_account_svc_prefix"]
+  },
   "source": "QRadar WinCollect",
   "event_type": "WindowsSecurity-4688",
   "timestamp": "2026-07-05T06:00:00Z",
@@ -1742,6 +1798,13 @@ _PSH_A = _j(r"""
 
 _PSH_B = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P5b_powershell_encoded_download_cradle_high",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 119,
+    "expected_guardrails_that_should_fire": ["never_powershell_persistence_without_persistence_evidence"],
+    "expected_vendor_semantics": ["windows_4688.encoded_command_signal", "windows_4688.download_cradle_signal", "windows_4688.lolbin_pattern_signal", "windows_4688.high_privilege_actor_signal"]
+  },
   "source": "QRadar WinCollect",
   "event_type": "WindowsSecurity-4688",
   "timestamp": "2026-07-05T06:15:00Z",
@@ -1799,6 +1862,13 @@ _PSH_B = _j(r"""
 
 _PSH_C = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P5c_powershell_encoded_no_persistence_evidence",
+    "expected_verdict": "SUSPICIOUS",
+    "expected_category_id": 119,
+    "expected_guardrails_that_should_fire": ["never_powershell_persistence_without_persistence_evidence"],
+    "expected_vendor_semantics": ["windows_4688.encoded_command_signal", "windows_4688.download_cradle_signal", "windows_4688.companion_events_all_false"]
+  },
   "source": "QRadar WinCollect",
   "event_type": "WindowsSecurity-4688",
   "timestamp": "2026-07-05T06:30:00Z",
@@ -1852,6 +1922,13 @@ _PSH_C = _j(r"""
 
 _PA_DNS_A = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P6_pa_threat_dns_sinkhole_resolver_misread",
+    "expected_verdict": "SUSPICIOUS",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["never_label_public_dns_resolver_as_c2", "never_propagate_signature_severity_to_incident", "recognise_sinkhole_action_as_defended"],
+    "expected_vendor_semantics": ["palo_alto_threat_dns.dns_resolver_ips_are_query_destinations_not_c2", "palo_alto_threat_dns.queried_domain_is_the_ioc", "palo_alto_threat_dns.action_field_shows_disposition", "palo_alto_threat_dns.severity_field_is_signature_confidence_not_incident_severity"]
+  },
   "source": "Palo Alto Threat",
   "event_type": "PAN-THREAT-DNS",
   "timestamp": "2026-07-05T05:30:00Z",
@@ -1904,6 +1981,13 @@ _PA_DNS_A = _j(r"""
 
 _RANSOM_D = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P7_locky_filename_no_encryption_behavior_fp",
+    "expected_verdict": "SUSPICIOUS",
+    "expected_category_id": 111,
+    "expected_guardrails_that_should_fire": ["never_ransomware_without_cat107_encryption"],
+    "expected_vendor_semantics": ["ransomware_behavior.filename_alone_is_not_ransomware", "yara.family_name_match_is_static_hint_only"]
+  },
   "source": "CrowdStrike Falcon",
   "event_type": "EDR-Detect",
   "timestamp": "2026-07-05T05:35:00Z",
@@ -1962,6 +2046,13 @@ _RANSOM_D = _j(r"""
 
 _BENIGN_C2_A = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P8_windows_update_svchost_beacon_benign",
+    "expected_verdict": "BENIGN",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["never_c2_on_benign_ioc"],
+    "expected_vendor_semantics": ["ml_beacon.periodic_outbound_ml_signal", "windows.svchost_wuauserv_is_windows_update", "public_enrichment.microsoft_owned_infra_benign", "microsoft_graph.msal_token_refresh_300s_cadence"]
+  },
   "source": "CrowdStrike Falcon",
   "event_type": "EDR-Detect",
   "timestamp": "2026-07-05T05:40:00Z",
@@ -1976,13 +2067,13 @@ _BENIGN_C2_A = _j(r"""
   "raw_log": {
     "format": "JSON-Envelope",
     "syslog_wrapper": "<134>1 2026-07-05T05:40:00Z crowdstrike-forwarder - - - -",
-    "body": "{\"detect_id\":\"ldt:sol-crowdstrike-03:0001\",\"device\":{\"hostname\":\"WKS-CORPS-055\"},\"process\":{\"filename\":\"C:\\\\Windows\\\\System32\\\\svchost.exe\",\"cmdline\":\"svchost.exe -k netsvcs -p -s wuauserv\",\"parent\":\"services.exe\"},\"network\":{\"connections\":[{\"remote_ip\":\"20.190.190.130\",\"remote_port\":443,\"remote_domain\":\"login.microsoftonline.com\",\"beacon_interval_seconds\":300,\"beacon_stddev_ms\":8},{\"remote_ip\":\"40.126.0.85\",\"remote_port\":443,\"remote_domain\":\"graph.microsoft.com\",\"beacon_interval_seconds\":300,\"beacon_stddev_ms\":12}]},\"detection_signal\":\"periodic_outbound_pattern_ml_score=0.72\"}"
+    "body": "{\"detect_id\":\"ldt:sol-crowdstrike-03:0001\",\"device\":{\"hostname\":\"WKS-CORPS-055\"},\"process\":{\"filename\":\"C:\\\\Windows\\\\System32\\\\svchost.exe\",\"cmdline\":\"svchost.exe -k netsvcs -s wuauserv\",\"parent\":\"services.exe\"},\"network\":{\"connections\":[{\"remote_ip\":\"20.190.190.130\",\"remote_port\":443,\"remote_domain\":\"login.microsoftonline.com\",\"beacon_interval_seconds\":300,\"beacon_stddev_ms\":8},{\"remote_ip\":\"40.126.0.85\",\"remote_port\":443,\"remote_domain\":\"graph.microsoft.com\",\"beacon_interval_seconds\":300,\"beacon_stddev_ms\":12}]},\"detection_signal\":\"periodic_outbound_pattern_ml_score=0.72\"}"
   },
   "parsed": {
     "device_hostname": "WKS-CORPS-055",
     "process": {
       "filename": "C:\\Windows\\System32\\svchost.exe",
-      "cmdline": "svchost.exe -k netsvcs -p -s wuauserv",
+      "cmdline": "svchost.exe -k netsvcs -s wuauserv",
       "parent_process": "services.exe"
     },
     "network_connections": [
@@ -2015,6 +2106,13 @@ _BENIGN_C2_A = _j(r"""
 
 _DNS_C2_A = _j(r"""
 {
+  "_test_meta": {
+    "test_payload_id": "P9_dns_single_query_known_c2_not_tunneling",
+    "expected_verdict": "MALICIOUS",
+    "expected_category_id": 109,
+    "expected_guardrails_that_should_fire": ["never_dns_tunneling_without_cardinality_signal"],
+    "expected_vendor_semantics": ["palo_alto_threat_dns.queried_domain_is_the_ioc", "palo_alto_threat_dns.dns_resolver_ips_are_query_destinations_not_c2", "dns.cardinality_signals_required_for_tunneling"]
+  },
   "source": "Palo Alto Threat",
   "event_type": "PAN-THREAT-DNS",
   "timestamp": "2026-07-05T05:45:00Z",
