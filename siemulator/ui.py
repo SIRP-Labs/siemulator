@@ -1399,7 +1399,7 @@ function renderScenarioChips() {{
     const id = s._scenario_id || "?";
     (groups[id] = groups[id] || []).push(s);
   }}
-  const order = ["S1", "S2", "S3", "S4", "S5", "TEST-A", "TEST-B", "TEST-C", "TEST-D", "TEST-E", "TEST-F", "TEST-G", "TEST-H", "TEST-I", "TEST-J", "DEMO-A", "DEMO-B", "DEMO-C", "DEMO-D", "DEMO-E", "DEMO-F", "DEMO-G", "DEMO-H", "SCAN-A", "SCAN-B", "SCAN-C", "ENRICH-A", "ENRICH-B", "ENRICH-C", "ENRICH-D", "ENRICH-E"];
+  const order = ["S1", "S2", "S3", "S4", "S5", "TEST-A", "TEST-B", "TEST-C", "TEST-D", "TEST-E", "TEST-F", "TEST-G", "TEST-H", "TEST-I", "TEST-J", "DEMO-A", "DEMO-B", "DEMO-C", "DEMO-D", "DEMO-E", "DEMO-F", "DEMO-G", "DEMO-H", "SCAN-A", "SCAN-B", "SCAN-C", "ENRICH-A", "ENRICH-B", "ENRICH-C", "ENRICH-D", "ENRICH-E", "TRELLIX-A", "WIN-4672", "PA-SMB-A", "PA-SMB-B", "RANSOM-A", "RANSOM-B", "RANSOM-C", "PSH-A", "PSH-B", "PSH-C"];
   const chips = order.filter(id => groups[id]).map(id => {{
     const count = groups[id].length;
     return `<span class="chip" onclick="selectScenario('${{id}}')"><span class="id">${{id}}</span>${{count > 1 ? count + " alerts" : "1 offence"}}</span>`;

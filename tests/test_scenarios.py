@@ -7,12 +7,12 @@ def test_scenarios_module_loads():
     from siemulator import scenarios
 
     out = scenarios.all_scenarios_as_qradar()
-    assert len(out) == 38, (
+    assert len(out) == 48, (
         "expected exactly 38 scenario alerts (12 S1-S5 + 10 v2 TEST A-J + 8 v3 DEMO A-H + 3 v4 SCAN A-C + 5 v5 ENRICH A-E)"
     )
     ids = [s["id"] for s in out]
-    assert all(90_000 < i < 90_100 for i in ids)
-    assert len(set(ids)) == 38, "scenario IDs must be unique"
+    assert all(90_000 < i < 90_200 for i in ids)
+    assert len(set(ids)) == 48, "scenario IDs must be unique"
 
 
 def test_scenarios_have_qradar_shape():
@@ -34,17 +34,17 @@ def test_scenarios_endpoint_direct(qradar_client):
     r = c.get("/qradar/api/siem/scenarios?token=stok")
     assert r.status_code == 200
     items = r.json()
-    assert len(items) == 38
+    assert len(items) == 48
     s1_ids = sorted(s["id"] for s in items if s.get("_scenario_id") == "S1")
     assert s1_ids == [90011, 90012, 90013, 90014, 90015]
 
 
 def test_scenarios_via_query_param(qradar_client):
-    """``?scenarios=all`` on /api/siem/offenses returns all 38 scenarios."""
+    """``?scenarios=all`` on /api/siem/offenses returns all 48 scenarios."""
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all")
     assert r.status_code == 200
-    assert len(r.json()) == 38
+    assert len(r.json()) == 48
 
 
 def test_scenarios_mix_mode(qradar_client):
@@ -55,7 +55,7 @@ def test_scenarios_mix_mode(qradar_client):
         headers={"Range": "items=0-2"},
     )
     items = r.json()
-    assert len(items) >= 41  # 38 scenarios + 3 templates
+    assert len(items) >= 51  # 48 scenarios + 3 templates
 
 
 def test_scenarios_preserve_multi_source_narratives():
