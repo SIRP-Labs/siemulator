@@ -297,7 +297,7 @@ crashes — they're in `tests/test_qradar.py`):
   `POST /qradar/_debug/reset_scenarios` (admin-key gated).
 - **`batch`** — Rotate one scenario per call (round-robin through all
   22). Useful for slow-drip ingestion testing.
-- **`replay`** — All 48 scenarios in one response, ignoring the one-shot
+- **`replay`** — All 52 scenarios in one response, ignoring the one-shot
   dedup set. Useful for one-shot ad-hoc bulk ingestion tests.
 - **`mix`** — All scenarios + N synthetic templates (N from the `Range:
   items=0-N` header). Useful for testing how your consumer handles a

@@ -1850,6 +1850,229 @@ _PSH_C = _j(r"""
 """)
 
 
+_PA_DNS_A = _j(r"""
+{
+  "source": "Palo Alto Threat",
+  "event_type": "PAN-THREAT-DNS",
+  "timestamp": "2026-07-05T05:30:00Z",
+  "severity": "Critical",
+  "confidence": 90,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "DNS"],
+  "alert": {
+    "name": "DNS Security signature — suspicious lookup sinkholed",
+    "description": "Client queried a DNS name that matched a threat-intel signature. The firewall sinkholed the response (defence succeeded). Tests: consumer must (a) name the queried DOMAIN as the IOC, not the resolver IP, (b) NOT label 8.8.8.8 (Google Public DNS) as C2, (c) NOT propagate the signature-confidence severity=critical field onto incident severity, (d) recognise action=sinkhole as a defended-against event, not a live compromise."
+  },
+  "raw_log": {
+    "format": "PAN-CSV-THREAT",
+    "syslog_wrapper": "<134>1 2026-07-05T05:30:00Z pa-fw-1.acme.local PA-VM - - -",
+    "body": "1,2026/07/05 05:30:00,000123457,THREAT,dns,2560,2026/07/05 05:30:00,192.168.10.5,8.8.8.8,,,DNS-Egress,,,dns-base,vsys1,Trust,Untrust,ae1.1205,ae1.99,LOG-FWD-PROFILE,2026/07/05 05:30:00,9876543,1,54321,53,54321,53,0x0,udp,sinkhole,\"suspicious.malware-family.example\",T1071.004 DNS Tunneling Detected,any,critical,client-to-server,45001,0x0,192.168.0.0-192.168.255.255,United States,0,,0,,,0,,,,,,,,,0,0,0,0,pa-fw-1,PANW,DNS-Security-Signature,86400,,,,,,dns,unknown"
+  },
+  "parsed": {
+    "type": "THREAT",
+    "subtype": "dns",
+    "src": "192.168.10.5",
+    "dst": "8.8.8.8",
+    "dport": 53,
+    "protocol": "udp",
+    "action": "sinkhole",
+    "misc_queried_domain": "suspicious.malware-family.example",
+    "threat_id": "T1071.004 DNS Tunneling Detected",
+    "severity_signature_confidence": "critical",
+    "rule_name": "DNS-Egress",
+    "signature_source": "DNS-Security-Signature"
+  },
+  "iocs": [
+    {"type": "domain", "value": "suspicious.malware-family.example", "pattern": "queried_c2_domain_ioc"},
+    {"type": "ip", "value": "8.8.8.8", "pattern": "public_dns_resolver_not_c2"}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV3",
+  "expected_artifact_mapping": {
+    "primary_ioc": "suspicious.malware-family.example",
+    "resolver_ip_role": "public_dns_resolver_not_c2",
+    "action_disposition": "defended_sinkholed"
+  },
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "defended_sinkhole",
+  "expected_severity": "SEV3",
+  "test_notes": "PAN THREAT-DNS misread test. Queried domain (misc field) IS the IOC; dst 8.8.8.8 is Google Public DNS resolver used to look it up, NEVER attacker C2. action=sinkhole means the firewall already neutralised the query. severity=critical is the SIGNATURE confidence, NOT the incident severity — do not promote to SEV1 on that basis. Correct verdict: SUSPICIOUS (defended-against), not MALICIOUS. Correct recommendation: hunt for the host process that generated the query, block domain, no containment (the network never reached C2)."
+}
+""")
+
+
+_RANSOM_D = _j(r"""
+{
+  "source": "CrowdStrike Falcon",
+  "event_type": "EDR-Detect",
+  "timestamp": "2026-07-05T05:35:00Z",
+  "severity": "Medium",
+  "confidence": 82,
+  "category": "111 Endpoint Defense Evasion",
+  "qradar_categories": ["Endpoint Defense Evasion", "Malware Sample"],
+  "alert": {
+    "name": "PE file with ransomware-family filename copied to Downloads — no encryption behaviour",
+    "description": "YARA matched a ransomware-family signature on a PE file, but NONE of the required behavioural evidence (mass encryption, mass rename, shadow-copy deletion, ransom-note drop) has been observed on the host. Tests the never_ransomware_without_cat107_encryption guardrail — verdict must NOT be Ransomware on family-name/YARA evidence alone."
+  },
+  "raw_log": {
+    "format": "JSON-Envelope",
+    "syslog_wrapper": "<134>1 2026-07-05T05:35:00Z crowdstrike-forwarder - - - -",
+    "body": "{\"detect_id\":\"ldt:sol-crowdstrike-02:0001\",\"device\":{\"hostname\":\"WKS-CORPS-042\",\"device_id\":\"sol-crowdstrike-02\"},\"process\":{\"filename\":\"C:\\\\Users\\\\dev.user\\\\Downloads\\\\locky.exe\",\"cmdline\":\"locky.exe\",\"sha256\":\"6a6d33f7bd5a2e29e5b0c8b6a9d8e4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7\",\"parent\":\"chrome.exe\"},\"behaviors\":{\"file_mass_encryption\":false,\"shadow_copy_deletion\":false,\"ransom_note_dropped\":null,\"file_mass_rename\":false},\"static_analysis\":{\"yara_match\":\"family_name_locky_variant_indicator\",\"yara_source\":\"internal_rule_set\"}}"
+  },
+  "parsed": {
+    "device_hostname": "WKS-CORPS-042",
+    "process": {
+      "filename": "C:\\Users\\dev.user\\Downloads\\locky.exe",
+      "cmdline": "locky.exe",
+      "sha256": "6a6d33f7bd5a2e29e5b0c8b6a9d8e4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7",
+      "parent_process": "chrome.exe"
+    },
+    "network": null,
+    "behaviors": {
+      "file_mass_encryption": false,
+      "shadow_copy_deletion": false,
+      "ransom_note_dropped": null,
+      "file_mass_rename": false,
+      "process_lineage": ["chrome.exe", "locky.exe"]
+    },
+    "static_analysis": {
+      "yara_match": "family_name_locky_variant_indicator",
+      "yara_source": "internal_rule_set"
+    }
+  },
+  "iocs": [
+    {"type": "hash_sha256", "value": "6a6d33f7bd5a2e29e5b0c8b6a9d8e4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7", "pattern": "yara_family_name_match_no_behavior"}
+  ],
+  "expected_iti_category_id": 111,
+  "expected_iti_category_name": "Endpoint Defense Evasion",
+  "expected_iti_attack_severity": "SEV3",
+  "expected_artifact_mapping": {
+    "primary_ioc": "6a6d33f7bd5a2e29e5b0c8b6a9d8e4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7",
+    "yara_signal_role": "static_family_hint_only",
+    "encryption_evidence_present": false
+  },
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "pre_execution_malware_sample_pending_review",
+  "expected_severity": "SEV3",
+  "test_notes": "Ransomware-by-filename negative test. Filename locky.exe + YARA family-name hit tempt an LLM to classify Ransomware, but ALL four required-behaviour signals are false/null: no mass-encryption, no shadow-copy deletion, no ransom-note drop, no mass-rename. Guardrail never_ransomware_without_cat107_encryption must fire — verdict SUSPICIOUS, category stays 111 Endpoint Defense Evasion, no SEV1 escalation, no ransomware-containment recommendation. Correct narrative names it a pre-execution malware sample pending analyst review."
+}
+""")
+
+
+_BENIGN_C2_A = _j(r"""
+{
+  "source": "CrowdStrike Falcon",
+  "event_type": "EDR-Detect",
+  "timestamp": "2026-07-05T05:40:00Z",
+  "severity": "Medium",
+  "confidence": 60,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "Beacon Suspected"],
+  "alert": {
+    "name": "Periodic outbound pattern — beacon-like ML signal",
+    "description": "ML detector flagged svchost.exe for periodic outbound connections at 300s intervals with low stddev. All destination IOCs enrich BENIGN (Microsoft-owned infrastructure — Graph/MSAL token refresh + Windows Update). Tests the never_c2_on_benign_ioc guardrail — analysis must not fabricate a C2 attribution on IOCs that all enrichment sources agree are benign."
+  },
+  "raw_log": {
+    "format": "JSON-Envelope",
+    "syslog_wrapper": "<134>1 2026-07-05T05:40:00Z crowdstrike-forwarder - - - -",
+    "body": "{\"detect_id\":\"ldt:sol-crowdstrike-03:0001\",\"device\":{\"hostname\":\"WKS-CORPS-055\"},\"process\":{\"filename\":\"C:\\\\Windows\\\\System32\\\\svchost.exe\",\"cmdline\":\"svchost.exe -k netsvcs -p -s wuauserv\",\"parent\":\"services.exe\"},\"network\":{\"connections\":[{\"remote_ip\":\"20.190.190.130\",\"remote_port\":443,\"remote_domain\":\"login.microsoftonline.com\",\"beacon_interval_seconds\":300,\"beacon_stddev_ms\":8},{\"remote_ip\":\"40.126.0.85\",\"remote_port\":443,\"remote_domain\":\"graph.microsoft.com\",\"beacon_interval_seconds\":300,\"beacon_stddev_ms\":12}]},\"detection_signal\":\"periodic_outbound_pattern_ml_score=0.72\"}"
+  },
+  "parsed": {
+    "device_hostname": "WKS-CORPS-055",
+    "process": {
+      "filename": "C:\\Windows\\System32\\svchost.exe",
+      "cmdline": "svchost.exe -k netsvcs -p -s wuauserv",
+      "parent_process": "services.exe"
+    },
+    "network_connections": [
+      {"remote_ip": "20.190.190.130", "remote_port": 443, "remote_domain": "login.microsoftonline.com", "beacon_interval_seconds": 300, "beacon_stddev_ms": 8},
+      {"remote_ip": "40.126.0.85", "remote_port": 443, "remote_domain": "graph.microsoft.com", "beacon_interval_seconds": 300, "beacon_stddev_ms": 12}
+    ],
+    "detection_signal": "periodic_outbound_pattern_ml_score=0.72"
+  },
+  "iocs": [
+    {"type": "ip", "value": "20.190.190.130", "pattern": "microsoft_owned_benign"},
+    {"type": "ip", "value": "40.126.0.85", "pattern": "microsoft_owned_benign"},
+    {"type": "domain", "value": "login.microsoftonline.com", "pattern": "microsoft_owned_benign"},
+    {"type": "domain", "value": "graph.microsoft.com", "pattern": "microsoft_owned_benign"}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV3",
+  "expected_artifact_mapping": {
+    "process_role": "windows_update_svchost_legitimate",
+    "iocs_role": "microsoft_owned_benign_infra",
+    "beacon_signal_role": "graph_msal_token_refresh_pattern"
+  },
+  "expected_verdict": "BENIGN",
+  "expected_disposition": "false_positive_periodic_outbound_ml",
+  "expected_severity": "SEV3",
+  "test_notes": "C2-on-benign-IOC negative test. All 4 network IOCs are Microsoft-owned infrastructure (login.microsoftonline.com + graph.microsoft.com + their public IPs) — every enrichment source will return BENIGN. The subject line says 'beacon-like' and the ML score is 0.72, both of which tempt an LLM to fabricate a C2 story. Guardrail never_c2_on_benign_ioc must block that. Correct narrative: process is legitimate Windows Update svchost, the 300s cadence is Graph/MSAL token refresh + WU poll, verdict BENIGN, recommendation is to tune the ML rule + suppress on WU process context."
+}
+""")
+
+
+_DNS_C2_A = _j(r"""
+{
+  "source": "Palo Alto Threat",
+  "event_type": "PAN-THREAT-DNS",
+  "timestamp": "2026-07-05T05:45:00Z",
+  "severity": "High",
+  "confidence": 88,
+  "category": "109 Command and Control",
+  "qradar_categories": ["Command and Control", "DNS"],
+  "alert": {
+    "name": "Single DNS lookup to known Cobalt Strike C2 domain",
+    "description": "A single DNS query from an internal client resolved (via public resolver) to a domain the DNS-Security signature knows as Cobalt Strike C2 infrastructure. This is regular C2 name resolution, NOT DNS-as-transport tunneling. Tests never_dns_tunneling_without_cardinality_signal — analysis must NOT invoke T1071.004 tunneling without at least one cardinality/frequency/entropy signal present."
+  },
+  "raw_log": {
+    "format": "PAN-CSV-THREAT",
+    "syslog_wrapper": "<134>1 2026-07-05T05:45:00Z pa-fw-1.acme.local PA-VM - - -",
+    "body": "1,2026/07/05 05:45:00,000123458,THREAT,dns,2560,2026/07/05 05:45:00,192.168.10.42,8.8.8.8,,,DNS-Egress,,,dns-base,vsys1,Trust,Untrust,ae1.1205,ae1.99,LOG-FWD-PROFILE,2026/07/05 05:45:00,9876544,1,55432,53,55432,53,0x0,udp,alert,\"cobaltstrike-c2-known.badactor.example\",T1071.004 DNS Tunneling Detected,any,high,client-to-server,45002,0x0,192.168.0.0-192.168.255.255,United States,0,,0,,,0,,,,,,,,,0,0,0,0,pa-fw-1,PANW,DNS-Security-Signature,86400,,,,,,dns,unknown"
+  },
+  "parsed": {
+    "type": "THREAT",
+    "subtype": "dns",
+    "src": "192.168.10.42",
+    "dst": "8.8.8.8",
+    "dport": 53,
+    "protocol": "udp",
+    "action": "alert",
+    "misc_queried_domain": "cobaltstrike-c2-known.badactor.example",
+    "threat_id": "T1071.004 DNS Tunneling Detected",
+    "severity_signature_confidence": "high",
+    "rule_name": "DNS-Egress",
+    "signature_source": "DNS-Security-Signature",
+    "cardinality_signals": {
+      "high_subdomain_cardinality": false,
+      "high_query_frequency": false,
+      "high_label_entropy": false,
+      "response_size_anomaly": false,
+      "queries_observed_last_60s": 1
+    }
+  },
+  "iocs": [
+    {"type": "domain", "value": "cobaltstrike-c2-known.badactor.example", "pattern": "known_c2_domain"},
+    {"type": "ip", "value": "8.8.8.8", "pattern": "public_dns_resolver_not_c2"}
+  ],
+  "expected_iti_category_id": 109,
+  "expected_iti_category_name": "Command and Control",
+  "expected_iti_attack_severity": "SEV2",
+  "expected_artifact_mapping": {
+    "primary_ioc": "cobaltstrike-c2-known.badactor.example",
+    "resolver_ip_role": "public_dns_resolver_not_c2",
+    "tunneling_evidence_present": false,
+    "correct_mitre": "T1071.001 or T1568 (name resolution to C2), NOT T1071.004"
+  },
+  "expected_verdict": "MALICIOUS",
+  "expected_disposition": "regular_c2_name_resolution_not_tunneling",
+  "expected_severity": "SEV2",
+  "test_notes": "DNS-tunneling-guardrail test. Domain IS a known C2 (verdict correctly MALICIOUS), but the signature name says 'DNS Tunneling' — this tempts an LLM to narrate T1071.004 DNS-as-transport. All cardinality signals are false: 1 query in the last 60s, no subdomain fanout, no entropy spike, no response-size anomaly. Guardrail never_dns_tunneling_without_cardinality_signal must fire — the narrative must call it regular C2 name resolution (T1071.001 / T1568) and NOT tunneling. Correct recommendation: hunt for the responsible process on 192.168.10.42, block domain, no data-exfil-via-DNS narrative."
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -1915,6 +2138,12 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 108, "PSH-A",     "119 Process Execution — legitimate admin PowerShell (co-signal-absent, LOW)", _PSH_A),
     (SCENARIO_ID_BASE + 109, "PSH-B",     "119 Process Execution — encoded PowerShell + download cradle (HIGH bucket)", _PSH_B),
     (SCENARIO_ID_BASE + 110, "PSH-C",     "119 Process Execution — encoded PowerShell, no persistence evidence (guardrail test)", _PSH_C),
+    # v6 SIEM-shape payloads (2026-07-05, second batch) — 4 more guardrail
+    # negative-case scenarios. Offence IDs 90111-90114.
+    (SCENARIO_ID_BASE + 111, "PA-DNS-A",  "110 Network Anomaly — PA THREAT-DNS sinkholed, resolver-vs-C2 misread test", _PA_DNS_A),
+    (SCENARIO_ID_BASE + 112, "RANSOM-D",  "111 Endpoint Defense Evasion — ransomware filename, NO encryption behavior (guardrail test)", _RANSOM_D),
+    (SCENARIO_ID_BASE + 113, "BENIGN-C2-A", "110 Network Anomaly — periodic outbound to Microsoft infra (C2-on-benign-IOC guardrail)", _BENIGN_C2_A),
+    (SCENARIO_ID_BASE + 114, "DNS-C2-A", "109 Command and Control — single DNS lookup to known C2 (tunneling-cardinality guardrail)", _DNS_C2_A),
 ]
 
 
