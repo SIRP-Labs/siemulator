@@ -205,7 +205,7 @@ def _build_offense(seq: int = 0) -> dict:
 
 
 def build_offenses(n: int) -> list[dict]:
-    n = max(1, min(n, 50))
+    n = max(1, min(n, 1000))
     return [_build_offense(i) for i in range(n)]
 
 
@@ -303,7 +303,7 @@ def _make_router(prefix: str) -> APIRouter:
         def _extras_tail() -> list[dict]:
             if not extras or extras <= 0:
                 return []
-            return build_offenses(min(int(extras), 50))
+            return build_offenses(min(int(extras), 1000))
 
         if scenarios == "all":
             full = all_scenarios_as_qradar()

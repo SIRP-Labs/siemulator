@@ -590,11 +590,11 @@ def test_scenarios_all_with_extras_appends_random(qradar_client):
 def test_scenarios_all_extras_cap(qradar_client):
     from siemulator.qradar import _SCENARIOS_SERVED
     _SCENARIOS_SERVED.clear()
-    """extras is capped at 50 — larger values silently truncate."""
+    """extras is capped at 1000 — larger values silently truncate."""
     c = qradar_client(token="stok")
-    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=999")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=1500")
     items = r.json()
-    assert len(items) == 52 + 50
+    assert len(items) == 52 + 1000
 
 
 def test_scenarios_batch_with_extras(qradar_client):
