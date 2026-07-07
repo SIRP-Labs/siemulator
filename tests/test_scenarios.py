@@ -604,7 +604,7 @@ def test_scenarios_batch_with_extras(qradar_client):
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=batch&extras=5")
     items = r.json()
-    assert len(items) == 6
+    assert len(items) == 7
 
 
 def test_scenarios_all_default_bakes_in_500_extras(qradar_client):

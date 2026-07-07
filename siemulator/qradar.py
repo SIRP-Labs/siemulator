@@ -333,15 +333,26 @@ def _make_router(prefix: str) -> APIRouter:
             return out
 
         if scenarios == "batch":
+            # Batch mode rotates through the curated pool 2 alerts per call.
+            # Two per poll gives OmniSense enough context to correlate
+            # multi-source narratives (S1's 5-alert chain, SCAN's 3-alert
+            # chain) while still trickling in gradually.
             full = all_scenarios_as_qradar()
-            idx = _SCENARIO_ROTATION_STATE["next"] % len(full)
-            _SCENARIO_ROTATION_STATE["next"] = idx + 1
+            _BATCH_SIZE = 2
+            start = _SCENARIO_ROTATION_STATE["next"]
+            picked = [full[(start + k) % len(full)] for k in range(_BATCH_SIZE)]
+            _SCENARIO_ROTATION_STATE["next"] = start + _BATCH_SIZE
             tail = _extras_tail()
-            out = [full[idx]] + tail
-            response.headers["X-Mock-Scenario-Index"] = f"{idx + 1}/{len(full)}"
-            response.headers["X-Mock-Scenario-Id"] = str(full[idx].get("offense_id"))
+            out = picked + tail
+            end_idx = (start + _BATCH_SIZE) % len(full) or len(full)
+            response.headers["X-Mock-Scenario-Index"] = f"{start + 1}-{end_idx}/{len(full)}"
+            response.headers["X-Mock-Scenario-Ids"] = ",".join(str(s.get("offense_id")) for s in picked)
             response.headers["X-Mock-Extras-Appended"] = str(len(tail))
-            _record_request(request, f"scenarios=batch({idx + 1}/{len(full)},extras={len(tail)})", out)
+            _record_request(
+                request,
+                f"scenarios=batch({start + 1}-{end_idx}/{len(full)},extras={len(tail)})",
+                out,
+            )
             return out
 
         if scenarios == "replay":
