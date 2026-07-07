@@ -2171,6 +2171,364 @@ _DNS_C2_A = _j(r"""
 """)
 
 
+_DEFENDER_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "P10_defender_graph_security_full_arrays",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 111,
+    "expected_guardrails_that_should_fire": ["declarative_merge_source_defender"],
+    "expected_vendor_semantics": [
+      "defender_graph_security.vendor_information_provider",
+      "defender_graph_security.user_states_populated",
+      "defender_graph_security.host_states_populated",
+      "defender_graph_security.network_connections_populated",
+      "defender_graph_security.processes_populated",
+      "defender_graph_security.file_states_populated"
+    ]
+  },
+  "source": "Microsoft Defender for Endpoint",
+  "event_type": "Graph-Security-Alert",
+  "timestamp": "2026-07-07T04:15:00Z",
+  "severity": "High",
+  "confidence": 92,
+  "category": "111 Endpoint Defense Evasion",
+  "qradar_categories": ["Endpoint Defense Evasion", "Malicious Behavior"],
+  "alert": {
+    "name": "Defender ATP — process injection + credential access on domain controller",
+    "description": "Microsoft Graph Security alert with populated userStates / hostStates / networkConnections / processes / fileStates arrays. Tests the Defender YAML pack (#1692): source=defender should show up in the DECLARATIVE-MERGE log with every array element extracted."
+  },
+  "raw_log": {
+    "format": "Graph-Security-JSON",
+    "syslog_wrapper": "<134>1 2026-07-07T04:15:00Z defender-gateway - - - -",
+    "body": {
+      "id": "alert-9f2b8c3d-2026-07-07-04-15",
+      "azureTenantId": "00000000-0000-0000-0000-000000000000",
+      "category": "SuspiciousActivity",
+      "createdDateTime": "2026-07-07T04:15:00Z",
+      "eventDateTime": "2026-07-07T04:14:52Z",
+      "severity": "high",
+      "status": "newAlert",
+      "title": "Suspicious process injection + credential access",
+      "vendorInformation": {
+        "provider": "Microsoft Defender ATP",
+        "providerVersion": "10.8100.26100.4",
+        "vendor": "Microsoft",
+        "subProvider": "MDATP"
+      },
+      "userStates": [
+        {"userPrincipalName": "alice.smith@corp.local", "domainName": "CORP", "onPremisesSecurityIdentifier": "S-1-5-21-1234567890-1111", "logonId": "0x3E7"},
+        {"userPrincipalName": "svc_backup@corp.local",  "domainName": "CORP", "onPremisesSecurityIdentifier": "S-1-5-21-1234567890-2222", "logonId": "0x1A45"}
+      ],
+      "hostStates": [
+        {"fqdn": "DC01.corp.local",  "privateIpAddress": "10.20.30.5",  "os": "Windows Server 2022", "netBiosName": "DC01",  "isAzureAdJoined": true},
+        {"fqdn": "WKS-ADMIN-02.corp.local", "privateIpAddress": "10.20.30.42", "os": "Windows 11", "netBiosName": "WKS-ADMIN-02", "isAzureAdJoined": true}
+      ],
+      "networkConnections": [
+        {"destinationAddress": "185.220.101.34", "destinationPort": "443", "destinationUrl": "https://185.220.101.34/beacon", "protocol": "tcp"},
+        {"destinationAddress": "45.146.130.15",  "destinationPort": "8080", "destinationUrl": "http://malicious-c2.badactor.example/gate.php", "protocol": "tcp"}
+      ],
+      "processes": [
+        {"name": "rundll32.exe", "path": "C:\\Windows\\System32\\rundll32.exe", "commandLine": "rundll32.exe C:\\Users\\Public\\evil.dll,Start", "md5": "5d41402abc4b2a76b9719d911017c592", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "parentProcessName": "explorer.exe"},
+        {"name": "lsass.exe",    "path": "C:\\Windows\\System32\\lsass.exe",   "commandLine": "C:\\Windows\\System32\\lsass.exe",                            "md5": "9e107d9d372bb6826bd81d3542a419d6", "sha256": "6b5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f", "parentProcessName": "wininit.exe"}
+      ],
+      "fileStates": [
+        {"name": "evil.dll",    "path": "C:\\Users\\Public\\evil.dll",    "fileHash": {"hashType": "sha256", "hashValue": "aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66"}},
+        {"name": "stager.ps1",  "path": "C:\\Users\\Public\\stager.ps1",  "fileHash": {"hashType": "sha256", "hashValue": "bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66ee77"}}
+      ]
+    }
+  },
+  "parsed": {
+    "provider": "Microsoft Defender ATP",
+    "user_principal_names": ["alice.smith@corp.local", "svc_backup@corp.local"],
+    "host_fqdns": ["DC01.corp.local", "WKS-ADMIN-02.corp.local"],
+    "host_ips": ["10.20.30.5", "10.20.30.42"],
+    "connection_destination_ips": ["185.220.101.34", "45.146.130.15"],
+    "connection_destination_urls": ["https://185.220.101.34/beacon", "http://malicious-c2.badactor.example/gate.php"],
+    "process_hashes_md5": ["5d41402abc4b2a76b9719d911017c592", "9e107d9d372bb6826bd81d3542a419d6"],
+    "process_hashes_sha256": ["e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "6b5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f"],
+    "file_names": ["evil.dll", "stager.ps1"],
+    "file_hashes_sha256": ["aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66", "bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66ee77"]
+  },
+  "iocs": [
+    {"type": "ip",          "value": "185.220.101.34", "pattern": "ti_tor_exit_real"},
+    {"type": "ip",          "value": "45.146.130.15",  "pattern": "external_c2_candidate"},
+    {"type": "url",         "value": "http://malicious-c2.badactor.example/gate.php", "pattern": "external_c2_candidate"},
+    {"type": "hash_sha256", "value": "aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66", "pattern": "sideloaded_dll_hash"},
+    {"type": "hash_sha256", "value": "bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66ee77", "pattern": "stager_hash"},
+    {"type": "user",        "value": "alice.smith@corp.local", "pattern": "affected_user"},
+    {"type": "hostname",    "value": "DC01.corp.local", "pattern": "affected_host"}
+  ],
+  "expected_iti_category_id": 111,
+  "expected_iti_category_name": "Endpoint Defense Evasion",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_intrusion",
+  "expected_severity": "SEV1",
+  "test_notes": "Fix #1692 exercise — Microsoft Defender YAML pack. Consumer's DECLARATIVE-MERGE log MUST show source=defender and MUST extract every element of userStates (2), hostStates (2), networkConnections (2), processes (2), fileStates (2). vendorInformation.provider='Microsoft Defender ATP' is the vendor-detection anchor. If source doesn't resolve to 'defender', the YAML pack didn't fire."
+}
+""")
+
+
+_QR_PUBRES = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "P11_qradar_destination_ip_public_resolver_drop",
+    "expected_verdict": "SUSPICIOUS",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["public_resolver_ips_dropped", "drop_suppressed_reads_destination_ip"],
+    "expected_vendor_semantics": [
+      "qradar.destination_ip_reread_after_filter",
+      "public_ti.google_dns_is_resolver_not_ioc"
+    ]
+  },
+  "source": "QRadar SIEM",
+  "event_type": "QRadar-Offense",
+  "timestamp": "2026-07-07T04:20:00Z",
+  "severity": "Medium",
+  "confidence": 55,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "DNS"],
+  "alert": {
+    "name": "QRadar offense — destination_ip=8.8.8.8 (public resolver)",
+    "description": "QRadar offense whose destination_ip field is Google Public DNS. Tests fix #1693: the declarative merge should re-read destination_ip from raw AFTER the public_resolver_ips_dropped filter suppresses it, so 8.8.8.8 does NOT surface as an IOC. drop_suppressed=1 should appear in the log."
+  },
+  "raw_log": {
+    "format": "QRadar-JSON",
+    "syslog_wrapper": "<134>1 2026-07-07T04:20:00Z qradar - - - -",
+    "body": {
+      "offense_id": 90116,
+      "description": "DNS query to public resolver flagged by suspicious-dns-signature rule",
+      "source_ip": "10.20.30.42",
+      "destination_ip": "8.8.8.8",
+      "destination_port": 53,
+      "protocol": "udp",
+      "rule_name": "DNS-Suspicious-Signature",
+      "start_time": 1780000800000,
+      "log_source": {"name": "PAN-FW-EDGE-01", "type_id": 41, "type_name": "PaloAltoNetworksPA"}
+    }
+  },
+  "parsed": {
+    "offense_id": 90116,
+    "source_ip": "10.20.30.42",
+    "destination_ip": "8.8.8.8",
+    "destination_port": 53,
+    "protocol": "udp"
+  },
+  "iocs": [
+    {"type": "ip", "value": "8.8.8.8", "pattern": "public_dns_resolver_not_c2",
+     "note": "This IS the field the fix targets. Before #1693 this would be resurrected as an IOC. After the fix the filter suppresses it AND the re-read confirms drop_suppressed=1."},
+    {"type": "ip", "value": "10.20.30.42", "pattern": "internal_corp_source"}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV3",
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "true_positive_requires_review",
+  "expected_severity": "SEV3",
+  "test_notes": "Fix #1693 exercise — public_resolver_ips_dropped filter + destination_ip re-read. 8.8.8.8 in destination_ip is the fix's canonical target. Consumer log MUST show drop_suppressed=1 for the resolver IP; 8.8.8.8 MUST NOT land as an IOC on the incident."
+}
+""")
+
+
+_NOTION_EXFIL = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "P12_zscaler_notion_exfil_behavior_over_reputation",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 112,
+    "expected_guardrails_that_should_fire": ["behavior_overrides_reputation_adr_0068"],
+    "expected_vendor_semantics": [
+      "zscaler.large_post_body_signal",
+      "reputation.benign_saas_url_note_only",
+      "adr_0068.behavior_wins_over_reputation"
+    ]
+  },
+  "source": "Zscaler ZIA",
+  "event_type": "Web-Transaction",
+  "timestamp": "2026-07-07T04:25:00Z",
+  "severity": "High",
+  "confidence": 78,
+  "category": "112 Data Loss / Exfiltration",
+  "qradar_categories": ["Data Loss / Exfiltration", "Anomalous Traffic"],
+  "alert": {
+    "name": "Zscaler — abnormally large Base64 POST to api.notion.com",
+    "description": "Zscaler flagged a 262KB Base64-encoded POST to api.notion.com from a workstation. Destination is a benign-reputation SaaS URL, but the body size + Base64 shape are exfil-consistent. Tests ADR 0068 behavior_overrides_reputation: the incident MUST NOT close BENIGN just because api.notion.com enriches benign."
+  },
+  "raw_log": {
+    "format": "Zscaler-JSON",
+    "syslog_wrapper": "<134>1 2026-07-07T04:25:00Z zscaler-egress - - - -",
+    "body": {
+      "user": "alice.smith@corp.local",
+      "device": "WKS-CORPS-102",
+      "client_ip": "10.20.30.42",
+      "url": "https://api.notion.com/v1/pages",
+      "method": "POST",
+      "host": "api.notion.com",
+      "url_category": "Business Applications",
+      "url_reputation": "Trustworthy",
+      "response_status": 200,
+      "request_size_bytes": 262144,
+      "response_size_bytes": 512,
+      "content_type": "application/json",
+      "request_body_signature": "base64_json_payload_signature_hit",
+      "policy_action": "allowed",
+      "user_agent": "python-requests/2.32.3"
+    }
+  },
+  "parsed": {
+    "user": "alice.smith@corp.local",
+    "device": "WKS-CORPS-102",
+    "destination_url": "https://api.notion.com/v1/pages",
+    "destination_host": "api.notion.com",
+    "http_method": "POST",
+    "request_size_bytes": 262144,
+    "url_reputation": "Trustworthy",
+    "request_body_signature": "base64_json_payload_signature_hit"
+  },
+  "iocs": [
+    {"type": "domain", "value": "api.notion.com", "pattern": "benign_saas_url_role_note_only",
+     "note": "api.notion.com is a legitimate SaaS API. Enrichment WILL return BENIGN. The exfil signal is the request size + body shape, NOT the domain."},
+    {"type": "user", "value": "alice.smith@corp.local", "pattern": "affected_user"},
+    {"type": "ip", "value": "10.20.30.42", "pattern": "internal_corp_source"}
+  ],
+  "expected_iti_category_id": 112,
+  "expected_iti_category_name": "Data Loss / Exfiltration",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_exfiltration",
+  "expected_severity": "SEV1",
+  "test_notes": "ADR 0068 behavior_overrides_reputation exercise. Zscaler flagged the transaction due to abnormal request_size_bytes (262KB is 500x typical Notion API write) + base64 body shape. Domain api.notion.com will enrich BENIGN — that's expected. Consumer MUST escalate to MALICIOUS_CONFIRMED / Data Loss (Cat 112) on the behavior signal and MUST NOT close BENIGN on the URL reputation. Original bug: #289005."
+}
+""")
+
+
+_QR_VERSIP = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "P13_qradar_version_string_in_ip_field_double_drop",
+    "expected_verdict": "SUSPICIOUS",
+    "expected_category_id": 111,
+    "expected_guardrails_that_should_fire": ["version_string_not_ip_drop_1319", "public_resolver_and_versionoid_drop_1693"],
+    "expected_vendor_semantics": [
+      "field_semantics.version_string_looks_like_ip",
+      "field_semantics.co_located_version_token_disambiguates"
+    ]
+  },
+  "source": "QRadar SIEM",
+  "event_type": "QRadar-Offense",
+  "timestamp": "2026-07-07T04:30:00Z",
+  "severity": "Medium",
+  "confidence": 55,
+  "category": "111 Endpoint Defense Evasion",
+  "qradar_categories": ["Endpoint Defense Evasion"],
+  "alert": {
+    "name": "QRadar offense — agent version 6.5.2.1 landed in destination_ip field",
+    "description": "QRadar offense whose destination_ip field was populated from a log source that concatenated agent_version into an IP column. The literal 6.5.2.1 is an SEP agent version, not an IP. Adjacent 'version' token disambiguates. Tests both fix #1319 (version-string drop) and fix #1693 (double-drop suppression + reread)."
+  },
+  "raw_log": {
+    "format": "QRadar-JSON",
+    "syslog_wrapper": "<134>1 2026-07-07T04:30:00Z qradar - - - -",
+    "body": {
+      "offense_id": 90118,
+      "description": "SEP agent flagged suspicious binary — Endpoint Protection version 6.5.2.1",
+      "source_ip": "10.20.30.42",
+      "destination_ip": "6.5.2.1",
+      "destination_port": 0,
+      "log_source": {"name": "SEP-Manager-01", "type_id": 71, "type_name": "SymantecEndpointProtection"},
+      "payload_extract": "Symantec Endpoint Protection version 6.5.2.1 blocked C:\\Users\\Public\\evil.dll"
+    }
+  },
+  "parsed": {
+    "offense_id": 90118,
+    "source_ip": "10.20.30.42",
+    "destination_ip_raw": "6.5.2.1",
+    "adjacent_context_tokens": ["Endpoint Protection", "version", "6.5.2.1"],
+    "version_ioc_candidate": "6.5.2.1"
+  },
+  "iocs": [
+    {"type": "ip", "value": "6.5.2.1", "pattern": "version_string_not_ip",
+     "note": "6.5.2.1 in the destination_ip column is SEP agent version, not an IP. Adjacent 'version' token confirms. Must be dropped by fix #1319 AND the re-read must be suppressed by fix #1693."},
+    {"type": "ip", "value": "10.20.30.42", "pattern": "internal_corp_source"}
+  ],
+  "expected_iti_category_id": 111,
+  "expected_iti_category_name": "Endpoint Defense Evasion",
+  "expected_iti_attack_severity": "SEV3",
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "true_positive_requires_review",
+  "expected_severity": "SEV3",
+  "test_notes": "Fix #1319 + #1693 double exercise. 6.5.2.1 in destination_ip looks like an IP by shape but is a software version (SEP agent). Adjacent 'version' token disambiguates. Consumer MUST drop 6.5.2.1 as an IOC AND suppress its re-read. Log MUST show drop_suppressed=1 for the version-oid."
+}
+""")
+
+
+_NETWITNESS_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "P14_netwitness_decoder_smoke_test",
+    "expected_verdict": "SUSPICIOUS",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["netwitness_decoder_parses_full_shape"],
+    "expected_vendor_semantics": [
+      "netwitness.esrc_no_port_suffix",
+      "netwitness.session_and_alert_fields_extracted"
+    ]
+  },
+  "source": "NetWitness",
+  "event_type": "NetWitness-Alert",
+  "timestamp": "2026-07-07T04:35:00Z",
+  "severity": "Medium",
+  "confidence": 65,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "IDS/IPS"],
+  "alert": {
+    "name": "NetWitness — outbound-to-newly-registered domain (packet meta)",
+    "description": "NetWitness Concentrator alert with session-level metadata (esrc/edst/alert.id/session.id). Live fixture for the NetWitness Python decoder. esrc has NO :port suffix (past bug: port-suffix breakage silently dropped incidents at pk.sirp.io)."
+  },
+  "raw_log": {
+    "format": "NetWitness-Syslog",
+    "syslog_wrapper": "<134>1 2026-07-07T04:35:00Z nw-concentrator-01 nw - - -",
+    "body": "cat=Suspicious cs1=outbound-newly-registered-domain esrc=10.20.30.42 edst=192.0.2.77 esrc_hostname=WKS-CORPS-102 edst_hostname=malicious-cdn.badactor.example spt=52411 dpt=443 proto=tcp sessionid=8877665544 alert.id=NW-ALERT-2026-07-07-0001 alert.name=OutboundToNewlyRegisteredDomain rule=nw-rule-42 confidence=65 severity=medium act=allow bytes=48231 bytes_sent=15022 bytes_received=33209 packets=142 event.time=2026-07-07T04:35:00Z"
+  },
+  "parsed": {
+    "cat": "Suspicious",
+    "cs1": "outbound-newly-registered-domain",
+    "esrc": "10.20.30.42",
+    "edst": "192.0.2.77",
+    "esrc_hostname": "WKS-CORPS-102",
+    "edst_hostname": "malicious-cdn.badactor.example",
+    "spt": 52411,
+    "dpt": 443,
+    "proto": "tcp",
+    "sessionid": "8877665544",
+    "alert_id": "NW-ALERT-2026-07-07-0001",
+    "alert_name": "OutboundToNewlyRegisteredDomain",
+    "rule": "nw-rule-42",
+    "confidence": 65,
+    "severity": "medium",
+    "act": "allow",
+    "bytes": 48231,
+    "bytes_sent": 15022,
+    "bytes_received": 33209,
+    "packets": 142
+  },
+  "iocs": [
+    {"type": "ip",       "value": "192.0.2.77",                          "pattern": "external_c2_candidate"},
+    {"type": "domain",   "value": "malicious-cdn.badactor.example",      "pattern": "fictional_c2"},
+    {"type": "ip",       "value": "10.20.30.42",                         "pattern": "internal_corp_source"},
+    {"type": "hostname", "value": "WKS-CORPS-102",                       "pattern": "internal_corp_host"}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV3",
+  "expected_verdict": "SUSPICIOUS",
+  "expected_disposition": "true_positive_requires_review",
+  "expected_severity": "SEV3",
+  "test_notes": "NetWitness decoder smoke test. Feed the raw body through the NetWitness Python decoder — expect every listed parsed field to come out. esrc=10.20.30.42 with NO :port suffix (the pk.sirp.io regression pattern must not fire). Live fixture for building the NetWitness YAML pack."
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -2242,6 +2600,12 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 112, "RANSOM-D",  "111 Endpoint Defense Evasion — ransomware filename, NO encryption behavior (guardrail test)", _RANSOM_D),
     (SCENARIO_ID_BASE + 113, "BENIGN-C2-A", "110 Network Anomaly — periodic outbound to Microsoft infra (C2-on-benign-IOC guardrail)", _BENIGN_C2_A),
     (SCENARIO_ID_BASE + 114, "DNS-C2-A", "109 Command and Control — single DNS lookup to known C2 (tunneling-cardinality guardrail)", _DNS_C2_A),
+    # v7 (2026-07-07) — 5 curated fix-proof scenarios. Offence IDs 90115-90119.
+    (SCENARIO_ID_BASE + 115, "DEFENDER-A",   "111 EDR Alert — Defender Graph Security shape, all arrays populated (#1692 YAML pack)", _DEFENDER_A),
+    (SCENARIO_ID_BASE + 116, "QR-PUBRES",    "110 Network Anomaly — QRadar destination_ip=8.8.8.8 (public_resolver_ips_dropped #1693)", _QR_PUBRES),
+    (SCENARIO_ID_BASE + 117, "NOTION-EXFIL", "112 Data Loss — Zscaler large Base64 POST to api.notion.com (ADR 0068 behavior_overrides_reputation)", _NOTION_EXFIL),
+    (SCENARIO_ID_BASE + 118, "QR-VERSIP",    "111 EDR Alert — QRadar destination_ip=6.5.2.1 version-string (#1319 + #1693 double-drop)", _QR_VERSIP),
+    (SCENARIO_ID_BASE + 119, "NETWITNESS-A", "110 Network Anomaly — NetWitness decoder smoke test (esrc no :port)", _NETWITNESS_A),
 ]
 
 
