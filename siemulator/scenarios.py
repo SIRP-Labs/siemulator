@@ -1173,8 +1173,8 @@ _ENRICH_E = _j(r"""
     "name": "Inbound scan from documented benign internet scanner",
     "description": "Edge firewall logged TCP SYN scan against perimeter from an IP GreyNoise tags as a 'benign internet scanner' (Shodan-style). Positive-control case for distinguishing 'attacker recon' from 'mass scanner background noise' — enrichment should drive the disposition recommender to auto-close as benign."
   },
-  "host": {"hostname": "EDGE-FW-01.example.local", "ip": "203.0.113.10 (public-side perimeter)",
-           "scope": "edge firewall logs only — no internal asset reached"},
+  "host": {"hostname": "EDGE-FW-01.example.local", "ip": "203.0.113.10",
+           "scope": "edge firewall logs only — no internal asset reached (public-side perimeter)"},
   "network": {
     "source_ip": "71.6.146.185",
     "source_country": "US (Shodan-attributed)",
