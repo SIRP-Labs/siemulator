@@ -22,6 +22,7 @@ treats each replay as the same incident. To force re-ingest, bump the
 from __future__ import annotations
 
 import json
+import re
 from typing import Any  # noqa: F401  — kept for backwards-compatible re-imports
 
 from siemulator.config import MOCK_SOURCE  # noqa: F401  — re-exported for callers
@@ -2718,23 +2719,54 @@ def _wrap_as_qradar_offence(
     }
 
 
+_IPV4_RE = re.compile(
+    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
+)
+
+
+def _is_ipv4(v: object) -> bool:
+    return isinstance(v, str) and bool(_IPV4_RE.match(v))
+
+
 def _extract_ip(raw: dict) -> str:
-    """Best-effort IP extraction from arbitrary alert shapes."""
+    """Best-effort IPv4 extraction from arbitrary alert shapes.
+
+    Every candidate is validated as a dotted-quad IPv4 before being
+    returned — never returns a hostname / device name / arbitrary string.
+    Falls back to iocs[] entries tagged as IPs.
+    """
     for path in (
         ("source_ip",),
         ("request", "source_ip"),
         ("device", "ip"),
         ("host", "ip"),
-        ("transaction", "device"),
+        ("actor", "source_ip"),
+        ("network", "source_ip"),
+        ("parsed", "source_ip"),
+        ("parsed", "src"),
+        ("parsed", "host_ips", 0),
     ):
         cur: Any = raw
         try:
             for k in path:
                 cur = cur[k]
-            if isinstance(cur, str) and cur:
+            if _is_ipv4(cur):
                 return cur
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, IndexError):
             continue
+    # Fall back to first IOC of type=ip whose value looks like an IPv4
+    iocs = raw.get("iocs") if isinstance(raw, dict) else None
+    if isinstance(iocs, list):
+        for ioc in iocs:
+            if not isinstance(ioc, dict):
+                continue
+            if ioc.get("type") in ("ip", "source_ip", "src_ip") and _is_ipv4(ioc.get("value")):
+                # Prefer an internal_corp_source-tagged IP if present
+                if ioc.get("pattern", "").startswith("internal_") or "source" in ioc.get("pattern", ""):
+                    return ioc["value"]
+        for ioc in iocs:
+            if isinstance(ioc, dict) and ioc.get("type") in ("ip", "source_ip", "src_ip") and _is_ipv4(ioc.get("value")):
+                return ioc["value"]
     return ""
 
 
