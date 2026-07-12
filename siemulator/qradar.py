@@ -504,11 +504,20 @@ def _make_router(prefix: str) -> APIRouter:
 
     @router.post("/_debug/reset_scenarios")
     async def debug_reset_scenarios(request: Request):
-        """Clear the served-scenarios set so ``?scenarios=all`` replays the pool."""
+        """Clear the served-scenarios set AND the batch rotation counter,
+        so ``?scenarios=all`` replays the pool and ``?scenarios=batch``
+        restarts from scenario #1."""
         _check_admin(request)
         prev = len(_SCENARIOS_SERVED)
+        prev_next = _SCENARIO_ROTATION_STATE["next"]
         _SCENARIOS_SERVED.clear()
-        return {"x-mock-source": MOCK_SOURCE, "cleared_count": prev, "served_now": 0}
+        _SCENARIO_ROTATION_STATE["next"] = 0
+        return {
+            "x-mock-source": MOCK_SOURCE,
+            "cleared_count": prev,
+            "batch_next_reset_from": prev_next,
+            "served_now": 0,
+        }
 
     @router.get("/_debug/scenarios_state")
     async def debug_scenarios_state(request: Request):
