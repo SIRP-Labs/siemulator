@@ -628,3 +628,100 @@ def test_scenarios_all_extras_zero_returns_bare_curated(qradar_client):
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=0")
     items = r.json()
     assert len(items) == 57
+
+
+# ── Vendor-native endpoints ───────────────────────────────────────
+
+
+def _vendor_client():
+    import os
+    os.environ["SIEMULATOR_CROWDSTRIKE_TOKEN"] = ""
+    os.environ["SIEMULATOR_DEFENDER_TOKEN"] = ""
+    os.environ["SIEMULATOR_NETWITNESS_TOKEN"] = ""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from siemulator.vendor_native import build_router
+    app = FastAPI()
+    app.include_router(build_router(token_getter=lambda v: ""))
+    return TestClient(app)
+
+
+def test_crowdstrike_endpoint_returns_falcon_envelope():
+    """/crowdstrike/api/v1/detects returns Falcon shape (meta+resources+errors),
+    not QRadar offence shape."""
+    c = _vendor_client()
+    r = c.get("/crowdstrike/api/v1/detects?scenarios=replay")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body.keys()) >= {"meta", "resources", "errors"}
+    assert isinstance(body["resources"], list)
+    assert body["resources"], "no CrowdStrike scenarios matched"
+    # Each resource should NOT carry QRadar-wrapper keys
+    r0 = body["resources"][0]
+    assert "offense_source" not in r0
+    assert "log_sources" not in r0
+    assert "source" in r0  # native raw_alert has a source field
+    assert "crowdstrike" in r0["source"].lower() or "falcon" in r0["source"].lower()
+
+
+def test_defender_endpoint_returns_graph_envelope():
+    """/defender/api/security/v1.0/alerts returns Graph Security shape
+    ({@odata.context, value})."""
+    c = _vendor_client()
+    r = c.get("/defender/api/security/v1.0/alerts?scenarios=replay")
+    assert r.status_code == 200
+    body = r.json()
+    assert "@odata.context" in body
+    assert "graph.microsoft.com" in body["@odata.context"]
+    assert isinstance(body["value"], list)
+    assert body["value"], "no Defender scenarios matched"
+    for alert in body["value"]:
+        assert "defender" in alert["source"].lower()
+
+
+def test_netwitness_endpoint_returns_sa_envelope():
+    """/netwitness/api/v1/incidents returns NetWitness-shape ({incidents, totalItems})."""
+    c = _vendor_client()
+    r = c.get("/netwitness/api/v1/incidents?scenarios=replay")
+    assert r.status_code == 200
+    body = r.json()
+    assert "incidents" in body
+    assert "totalItems" in body
+    assert body["totalItems"] == len(body["incidents"])
+    # NETWITNESS-A is the seeded NetWitness scenario
+    if body["incidents"]:
+        assert any("netwitness" in i["source"].lower() for i in body["incidents"])
+
+
+def test_vendor_endpoints_scenarios_batch_rotates():
+    """?scenarios=batch on a vendor endpoint returns one alert at a time
+    and rotates through the vendor's scenario pool."""
+    c = _vendor_client()
+    # Reset first
+    c.post("/_debug/reset_vendor?vendor=crowdstrike")
+    seen = set()
+    for _ in range(20):
+        r = c.get("/crowdstrike/api/v1/detects?scenarios=batch")
+        for res in r.json()["resources"]:
+            seen.add(res.get("_offense_id"))
+    assert len(seen) >= 2, "batch mode should rotate through CrowdStrike pool"
+
+
+def test_vendor_endpoints_no_qradar_shape_leaks():
+    """None of the vendor-native endpoints should ever emit QRadar
+    offence-wrapper keys (id, offense_id, offense_source, log_sources)
+    on their alert payloads."""
+    c = _vendor_client()
+    for path, key in (
+        ("/crowdstrike/api/v1/detects?scenarios=replay", "resources"),
+        ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
+        ("/netwitness/api/v1/incidents?scenarios=replay", "incidents"),
+    ):
+        r = c.get(path)
+        for alert in r.json()[key]:
+            for banned in ("offense_source", "log_sources", "magnitude",
+                           "credibility", "relevance", "source_address_ids"):
+                assert banned not in alert, (
+                    f"{path} leaked QRadar field {banned!r} in payload"
+                )

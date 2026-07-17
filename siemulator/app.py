@@ -61,6 +61,17 @@ def create_app() -> FastAPI:
     app.include_router(build_qradar_router())
     app.include_router(build_splunk_router())
 
+    # Per-vendor native endpoints — Falcon / Graph Security / NetWitness
+    # shapes without QRadar wrapping.
+    import os
+
+    from siemulator.vendor_native import build_router as build_vendor_router
+
+    def _vendor_token(vendor: str) -> str:
+        return os.environ.get(f"SIEMULATOR_{vendor.upper()}_TOKEN", "")
+
+    app.include_router(build_vendor_router(token_getter=_vendor_token))
+
     bound_prefixes = (logscale_prefix(), qradar_prefix(), splunk_prefix())
 
     # Fault injection — middleware for malformed-JSON path, dependency
