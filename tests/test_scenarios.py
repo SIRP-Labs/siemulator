@@ -607,15 +607,16 @@ def test_scenarios_batch_with_extras(qradar_client):
     assert len(items) == 7
 
 
-def test_scenarios_all_default_bakes_in_500_extras(qradar_client):
+def test_scenarios_all_default_returns_curated_only(qradar_client):
+    """``?scenarios=all`` with no extras= param returns just the 57
+    curated scenarios — extras is opt-in only after the runaway-flood
+    incident (was: 500 baked in by default)."""
     from siemulator.qradar import _SCENARIOS_SERVED
     _SCENARIOS_SERVED.clear()
-    """``?scenarios=all`` with no extras= param returns just the curated pool by default
-    offences by default — one poll returns 57 curated + 500 noise = 557."""
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all")
     items = r.json()
-    assert len(items) == 57 + 500
+    assert len(items) == 57
 
 
 def test_scenarios_all_extras_zero_returns_bare_curated(qradar_client):
