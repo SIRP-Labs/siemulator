@@ -59,17 +59,32 @@ schedule.
 
 | You want to test | Use surface | Why |
 |---|---|---|
-| QRadar offence ingestion (most SOARs) | `/qradar/*` | Native shape; consumers don't need custom mapping. 38 multi-source scenarios available with stable IDs for dedup. |
+| QRadar offence ingestion (most SOARs) | `/qradar/*` | Native shape; consumers don't need custom mapping. 57 multi-source scenarios available with stable IDs for dedup. |
 | Humio / Falcon LogScale push integrations | `/logscale/*` | Mirrors Humio REST exactly — `@timestamp`, `@id`, `@rawstring`, `#repo` envelope. |
-| Detection content (templates) — alert-shape testing | Either | Both surfaces draw from the same 6-template pool; pick the shape your downstream consumer expects. |
-| Multi-source attack-narrative testing (5-alert chains across multiple vendors) | `/qradar/*` with `?scenarios=…` | Only the QRadar surface exposes the 57 scenario library. Each scenario tags `_scenario_id` + `_raw_alert` so your SOAR can correlate by chain. |
-| Search-API testing (`/queryjobs`, Ariel) | Both | LogScale `queryjobs` POST→poll matches Humio; QRadar Ariel matches the IBM async-search shape. |
+| CrowdStrike Falcon vendor pack | `/crowdstrike/*` | Falcon Streaming API envelope (`{meta, resources[]}`) — filters the pool down to `source: CrowdStrike Falcon` scenarios so the Falcon parser sees its own shape. |
+| Microsoft Defender vendor pack | `/defender/*` | Microsoft Graph Security envelope (`{@odata.context, value[]}`) — scenarios with `source: Microsoft Defender…`. |
+| RSA NetWitness vendor pack | `/netwitness/*` | NetWitness SA envelope (`{incidents[], totalItems}`) — the NETWITNESS-A fixture and any future NetWitness-sourced scenarios. |
+| Detection content (templates) — alert-shape testing | LogScale / QRadar | Both aggregator surfaces draw from the same 6-template pool; pick the shape your downstream consumer expects. |
+| Multi-source attack-narrative testing (5-alert chains across multiple vendors) | `/qradar/*` with `?scenarios=…` | The QRadar surface exposes the whole 57 scenario library in one envelope, so cross-vendor correlation logic can be exercised end-to-end. |
+| Search-API testing (`/queryjobs`, Ariel) | LogScale / QRadar | LogScale `queryjobs` POST→poll matches Humio; QRadar Ariel matches the IBM async-search shape. |
 | Range-paginated ingestion (`Range: items=N-M`) | `/qradar/*` | QRadar canonical pagination header. LogScale uses `?limit=N` query param instead. |
 
 Most SOAR integrations want `/qradar/*` because (a) QRadar's
 offence shape is what most SOAR-vendor connectors are already built
-against, and (b) the 38 multi-source scenarios let you test correlation
+against, and (b) the 57 multi-source scenarios let you test correlation
 logic, not just shape parsing.
+
+**When to reach for the vendor-native endpoints:** if your SOAR has a
+vendor-specific parser (Falcon YAML pack, Defender Graph pack,
+NetWitness decoder) that keys off the vendor's actual API envelope
+shape, point that ingestion action at the vendor endpoint. The alert
+payloads are the same — only the outer envelope changes to match
+each vendor's real API. Your parser sees `resources[]` /
+`value[]` / `incidents[]` in the shape it expects. All three
+support `?scenarios=all|batch|replay` with per-vendor rotation +
+dedup state (independent of the QRadar counter). Reset a specific
+vendor's state via `POST /_debug/reset_vendor?vendor=crowdstrike`
+(or `?vendor=all`).
 
 ## Authentication patterns
 

@@ -3,14 +3,24 @@
 > Synthetic SIEM endpoints in real-vendor shapes — for SOAR / agent
 > integration testing without touching real customer data.
 
-`siemulator` is a small FastAPI service that emulates two SIEM REST surfaces
-from a single pool of synthetic CrowdStrike-flavoured detections and
-hand-crafted multi-source attack narratives:
+`siemulator` is a small FastAPI service that emulates SIEM + EDR REST surfaces
+from a single pool of synthetic detections and hand-crafted multi-source
+attack narratives. Two aggregating SIEM surfaces plus three vendor-native
+EDR/XDR endpoints:
 
-| Mount             | Shape                            | Auth                                    |
-| ----------------- | -------------------------------- | --------------------------------------- |
-| `/logscale/*`     | Falcon LogScale (Humio REST API) | `Authorization: Bearer` or `?token=`    |
-| `/qradar/*`       | IBM QRadar (offences + Ariel)    | `SEC` header, `Bearer`, or `?token=`    |
+| Mount                                    | Shape                                             | Auth                                    |
+| ---------------------------------------- | ------------------------------------------------- | --------------------------------------- |
+| `/logscale/*`                            | Falcon LogScale (Humio REST API)                  | `Authorization: Bearer` or `?token=`    |
+| `/qradar/*`                              | IBM QRadar (offences + Ariel)                     | `SEC` header, `Bearer`, or `?token=`    |
+| `/crowdstrike/api/v1/detects`            | Falcon Streaming API (`{meta, resources[]}`)      | `Authorization: Bearer` or `?token=`    |
+| `/defender/api/security/v1.0/alerts`     | Microsoft Graph Security (`{@odata.context, value[]}`) | `Authorization: Bearer` or `?token=`    |
+| `/netwitness/api/v1/incidents`           | RSA NetWitness SA (`{incidents[], totalItems}`)   | `Authorization: Bearer` or `?token=`    |
+
+The QRadar and LogScale surfaces aggregate every scenario in that surface's
+native envelope. The three vendor-native endpoints filter the pool by
+source vendor and serve only that vendor's alerts in the vendor's
+canonical API envelope — no QRadar wrapping, so a SOAR's per-vendor
+parsers see the shape they expect.
 
 It's the thing you point a SOAR ingestion job, a detection-engineering
 test harness, or an agent-chain integration test at when you want a
@@ -112,8 +122,13 @@ curl -H "Authorization: Bearer logscale-dev-token" \
 curl -H "SEC: qradar-dev-token" \
   "http://localhost:8080/qradar/api/siem/offenses"
 
-# All 38 multi-source attack scenarios
+# All 57 multi-source attack scenarios
 curl "http://localhost:8080/qradar/api/siem/scenarios?token=qradar-dev-token"
+
+# Vendor-native shapes — same scenario pool, filtered by vendor
+curl "http://localhost:8080/crowdstrike/api/v1/detects?scenarios=replay"        # Falcon envelope
+curl "http://localhost:8080/defender/api/security/v1.0/alerts?scenarios=replay" # Graph Security envelope
+curl "http://localhost:8080/netwitness/api/v1/incidents?scenarios=replay"       # NetWitness SA envelope
 ```
 
 ## Configuration
@@ -124,6 +139,9 @@ All via env vars. Defaults work for local testing — override in production.
 | ------------------------------ | ---------------------- | ------------------------------------------------------ |
 | `SIEMULATOR_LOGSCALE_TOKEN`    | `logscale-dev-token`   | Bearer token for `/logscale/*`                         |
 | `SIEMULATOR_QRADAR_TOKEN`      | `qradar-dev-token`     | SEC / Bearer token for `/qradar/*`                     |
+| `SIEMULATOR_CROWDSTRIKE_TOKEN` | _(empty — no auth)_    | Bearer / `?token=` for `/crowdstrike/*`                |
+| `SIEMULATOR_DEFENDER_TOKEN`    | _(empty — no auth)_    | Bearer / `?token=` for `/defender/*`                   |
+| `SIEMULATOR_NETWITNESS_TOKEN`  | _(empty — no auth)_    | Bearer / `?token=` for `/netwitness/*`                 |
 | `SIEMULATOR_ADMIN_KEY`         | _(empty — disabled)_   | Admin key for `/qradar/_debug/*`                       |
 | `SIEMULATOR_LOGSCALE_PREFIX`   | `/logscale`            | URL prefix override                                    |
 | `SIEMULATOR_QRADAR_PREFIX`     | `/qradar`              | URL prefix override                                    |
@@ -190,11 +208,34 @@ liveness probes that should never see HTML.
 | GET    | `/api/help` / `/api/help/capabilities`                  | —    | Health                                 |
 | GET    | `/api/siem/offenses[?scenarios=all\|batch\|replay\|mix]`| ✅   | Active offences + scenario modes       |
 | GET    | `/api/siem/offenses/{id}`                               | ✅   | Single offence (id echoed back)        |
-| GET    | `/api/siem/scenarios`                                   | ✅   | All 38 multi-source attack narratives  |
+| GET    | `/api/siem/scenarios`                                   | ✅   | All 57 multi-source attack narratives  |
 | GET    | `/api/siem/source_addresses`                            | ✅   | IP context (3 synthetic rows)          |
 | POST   | `/api/ariel/searches`                                   | ✅   | Submit (returns COMPLETED immediately) |
 | GET    | `/api/ariel/searches/{id}`                              | ✅   | Status                                 |
 | GET    | `/api/ariel/searches/{id}/results`                      | ✅   | Results `{events: [...]}`              |
+
+### Vendor-native endpoints
+
+Filter the shared scenario pool by `_raw_alert.source` and return each
+vendor's alerts in that vendor's canonical API envelope — no QRadar
+wrapping. Use these when your SOAR has a per-vendor parser (Falcon
+YAML pack, Defender Graph pack, NetWitness decoder) that needs to see
+its own shape.
+
+| Method | Path                                                    | Auth | Envelope                                              |
+| ------ | ------------------------------------------------------- | ---- | ----------------------------------------------------- |
+| GET    | `/crowdstrike/api/v1/detects[?scenarios=…]`             | ✅   | Falcon Streaming API: `{meta, resources[], errors}`   |
+| GET    | `/defender/api/security/v1.0/alerts[?scenarios=…]`      | ✅   | Microsoft Graph Security: `{@odata.context, value[]}` |
+| GET    | `/netwitness/api/v1/incidents[?scenarios=…]`            | ✅   | RSA NetWitness SA: `{incidents[], totalItems, page, size}` |
+| POST   | `/_debug/reset_vendor?vendor=<v>|all`                   | —    | Clear per-vendor rotation + dedup state               |
+
+All three support the same `?scenarios=all|batch|replay` modes as the
+QRadar endpoint. Rotation and dedup state is tracked per-vendor, so a
+`batch` poll on `/crowdstrike/*` doesn't advance the `/defender/*`
+counter and vice versa.
+
+Auth is optional — set the vendor's `SIEMULATOR_<VENDOR>_TOKEN` env
+var to require a token; leave it empty and the endpoint is unauthenticated.
 
 ## Response shape — quick reference
 

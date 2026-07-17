@@ -692,10 +692,12 @@ _HTML_TEMPLATE = """<!doctype html>
         Stop spinning up real SIEMs for integration tests.
       </p>
       <p class="hero-sub">
-        Synthetic SIEM data in three real-vendor shapes
+        Synthetic SIEM data in real-vendor shapes — SIEM aggregators
         (<strong>Falcon LogScale</strong>, <strong>IBM QRadar</strong>,
-        <strong>Splunk Enterprise</strong>) with the chaos-engineering and
-        regression-testing primitives you actually need.
+        <strong>Splunk Enterprise</strong>) plus vendor-native EDR/XDR
+        envelopes (<strong>CrowdStrike Falcon</strong>,
+        <strong>Microsoft Defender</strong>, <strong>RSA NetWitness</strong>).
+        Chaos-engineering and regression-testing primitives baked in.
         <strong>{scenario_count} multi-source attack scenarios</strong>,
         record/replay/diff, real-time SSE push. Zero customer data —
         every response carries <code>x-mock-source: siemulator</code>.
@@ -783,8 +785,8 @@ _HTML_TEMPLATE = """<!doctype html>
   <div class="features-grid">
     <div class="feature">
       <span class="icon">⚡</span>
-      <h3>Three real-vendor REST shapes</h3>
-      <p>Falcon LogScale (Humio REST), IBM QRadar (offences + Ariel), Splunk Enterprise (search jobs + oneshot). Consumers drop in unchanged — same fields, same envelopes.</p>
+      <h3>Six real-vendor REST shapes</h3>
+      <p>SIEM aggregators — Falcon LogScale (Humio REST), IBM QRadar (offences + Ariel), Splunk Enterprise (search jobs + oneshot). Vendor-native EDR/XDR — CrowdStrike Falcon Streaming, Microsoft Defender Graph Security, RSA NetWitness SA. Consumers drop in unchanged — same fields, same envelopes.</p>
     </div>
     <div class="feature">
       <span class="icon">🎯</span>
@@ -1091,11 +1093,16 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
     <li><span class="method get">GET</span><span class="path">{qr}/api/help</span><span class="note">health (no auth)</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/offenses</span><span class="note">?scenarios=all|batch|replay|mix</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/offenses/{{id}}</span></li>
-    <li><span class="method get">GET</span><span class="path">{qr}/api/siem/scenarios</span><span class="note">all 38 narratives</span></li>
+    <li><span class="method get">GET</span><span class="path">{qr}/api/siem/scenarios</span><span class="note">all 57 narratives</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/source_addresses</span></li>
     <li><span class="method post">POST</span><span class="path">{qr}/api/ariel/searches</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}/results</span></li>
+    <li>&nbsp;</li>
+    <li><span class="method get">GET</span><span class="path">/crowdstrike/api/v1/detects</span><span class="note">Falcon Streaming envelope (?scenarios=all|batch|replay)</span></li>
+    <li><span class="method get">GET</span><span class="path">/defender/api/security/v1.0/alerts</span><span class="note">Microsoft Graph Security envelope</span></li>
+    <li><span class="method get">GET</span><span class="path">/netwitness/api/v1/incidents</span><span class="note">RSA NetWitness SA envelope</span></li>
+    <li><span class="method post">POST</span><span class="path">/_debug/reset_vendor?vendor=&lt;v&gt;|all</span><span class="note">clear per-vendor rotation/dedup</span></li>
     <li>&nbsp;</li>
     <li><span class="method get">GET</span><span class="path">{sp}/services/server/info</span><span class="note">health (no auth)</span></li>
     <li><span class="method post">POST</span><span class="path">{sp}/services/search/jobs</span><span class="note">async submit → {{sid}}</span></li>
