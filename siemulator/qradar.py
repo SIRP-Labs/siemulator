@@ -300,10 +300,11 @@ def _make_router(prefix: str) -> APIRouter:
         _check_auth(request)
         _stamp(response)
 
-        # ``?scenarios=all`` bakes in 500 random-shape extras by default
-        # so a single poll yields 52 curated + 500 noise = 552 alerts.
-        # Callers wanting a bare scenario batch pass ``extras=0`` explicitly.
-        _DEFAULT_EXTRAS_FOR_ALL = 500
+        # ``?scenarios=all`` used to bake in 500 extras by default — that
+        # flooded downstream ingestion at ~30s cron cadence (700K alerts
+        # in half a day). Default is now 0; callers who want noise must
+        # opt in explicitly via ``&extras=N``.
+        _DEFAULT_EXTRAS_FOR_ALL = 0
 
         def _extras_tail() -> list[dict]:
             if extras is None:

@@ -610,7 +610,7 @@ def test_scenarios_batch_with_extras(qradar_client):
 def test_scenarios_all_default_bakes_in_500_extras(qradar_client):
     from siemulator.qradar import _SCENARIOS_SERVED
     _SCENARIOS_SERVED.clear()
-    """``?scenarios=all`` with no extras= param bakes in 500 random
+    """``?scenarios=all`` with no extras= param returns just the curated pool by default
     offences by default — one poll returns 57 curated + 500 noise = 557."""
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all")
