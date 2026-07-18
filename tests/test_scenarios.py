@@ -680,18 +680,60 @@ def test_defender_endpoint_returns_graph_envelope():
         assert "defender" in alert["source"].lower()
 
 
-def test_netwitness_endpoint_returns_sa_envelope():
-    """/netwitness/api/v1/incidents returns NetWitness-shape ({incidents, totalItems})."""
+def test_netwitness_endpoint_returns_respond_envelope():
+    """Both NetWitness paths return the documented Respond paging
+    envelope: items[] plus the full pageNumber/pageSize/totalPages/
+    totalItems/hasNext/hasPrevious set."""
     c = _vendor_client()
-    r = c.get("/netwitness/api/v1/incidents?scenarios=replay")
-    assert r.status_code == 200
-    body = r.json()
-    assert "incidents" in body
-    assert "totalItems" in body
-    assert body["totalItems"] == len(body["incidents"])
-    # NETWITNESS-A is the seeded NetWitness scenario
-    if body["incidents"]:
-        assert any("netwitness" in i["source"].lower() for i in body["incidents"])
+    for path in ("/rest/api/incidents", "/netwitness/api/v1/incidents"):
+        r = c.get(f"{path}?scenarios=replay")
+        assert r.status_code == 200, path
+        body = r.json()
+        for k in ("items", "pageNumber", "pageSize", "totalPages",
+                  "totalItems", "hasNext", "hasPrevious"):
+            assert k in body, f"{path} missing envelope key {k!r}"
+        assert body["totalItems"] == len(body["items"])
+        assert body["items"], f"{path} returned no incidents"
+        assert any("netwitness" in i["source"].lower() for i in body["items"])
+
+
+def test_netwitness_incident_uses_respond_field_names():
+    """Incident objects follow the Respond schema — INC- string id,
+    title/detail rather than a nested alert{}, riskScore+priority
+    rather than a severity label, and entities under events[]."""
+    c = _vendor_client()
+    inc = c.get("/rest/api/incidents?scenarios=replay").json()["items"][0]
+
+    assert isinstance(inc["id"], str) and inc["id"].startswith("INC-")
+    assert inc["title"], "title must carry the human-readable name"
+    assert inc["detail"], "detail must carry the description"
+    assert isinstance(inc["riskScore"], int)
+    assert 0 <= inc["riskScore"] <= 100
+    assert inc["priority"] in ("Low", "Medium", "High", "Critical")
+    assert inc["status"] == "New"
+    assert isinstance(inc["alertCount"], int)
+
+    assert isinstance(inc["events"], list) and inc["events"]
+    ev = inc["events"][0]
+    assert "source" in ev and "destination" in ev
+    assert "device" in ev["source"] and "device" in ev["destination"]
+    # esrc/edst from the raw packet meta land on the right side
+    assert ev["source"]["device"]["ipAddress"] == "10.20.30.42"
+    assert ev["destination"]["device"]["ipAddress"] == "192.0.2.77"
+
+
+def test_netwitness_paging_honours_page_params():
+    """pageSize / pageNumber slice the pool and drive the has*/total
+    flags, matching Respond's paging contract."""
+    c = _vendor_client()
+    body = c.get("/rest/api/incidents?scenarios=replay&pageSize=1&pageNumber=0").json()
+    assert body["pageSize"] == 1
+    assert body["pageNumber"] == 0
+    assert len(body["items"]) <= 1
+    assert body["hasPrevious"] is False
+    # With one incident in the pool there is exactly one page
+    assert body["totalPages"] == body["totalItems"]
+    assert body["hasNext"] is (body["totalPages"] > 1)
 
 
 def test_vendor_endpoints_scenarios_batch_rotates():
@@ -716,7 +758,7 @@ def test_vendor_endpoints_no_qradar_shape_leaks():
     for path, key in (
         ("/crowdstrike/api/v1/detects?scenarios=replay", "resources"),
         ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
-        ("/netwitness/api/v1/incidents?scenarios=replay", "incidents"),
+        ("/rest/api/incidents?scenarios=replay", "items"),
     ):
         r = c.get(path)
         for alert in r.json()[key]:
@@ -728,19 +770,28 @@ def test_vendor_endpoints_no_qradar_shape_leaks():
 
 
 def test_vendor_alerts_carry_portable_id_and_start_time():
-    """Vendor-native payloads must carry int `id` + int ms-epoch
-    `start_time` so consumers written against the QRadar shape contract
-    (which validates exactly those two fields) work unchanged."""
+    """Every vendor payload must expose an int alert id and an int
+    ms-epoch `start_time`, so consumers written against the QRadar
+    shape contract work unchanged.
+
+    Falcon and Graph Security can carry the int directly on `id`.
+    NetWitness cannot — Respond's `id` is the `INC-<n>` string — so
+    there the int lives on `_offense_id`. Consumers should read
+    `id` when it is an int and fall back to `_offense_id`.
+    """
     c = _vendor_client()
     for path, key in (
         ("/crowdstrike/api/v1/detects?scenarios=replay", "resources"),
         ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
-        ("/netwitness/api/v1/incidents?scenarios=replay", "incidents"),
+        ("/rest/api/incidents?scenarios=replay", "items"),
     ):
         alerts = c.get(path).json()[key]
         assert alerts, f"{path} returned no alerts"
         for a in alerts:
-            assert isinstance(a.get("id"), int), f"{path}: id not int"
+            portable = a["id"] if isinstance(a.get("id"), int) else a.get("_offense_id")
+            assert isinstance(portable, int), (
+                f"{path}: no int id on `id` or `_offense_id`"
+            )
             st = a.get("start_time")
             assert isinstance(st, int) and st > 1_000_000_000_000, (
                 f"{path}: start_time must be int ms-epoch, got {st!r}"
@@ -756,7 +807,7 @@ def test_vendor_alerts_carry_vendor_canonical_id_fields():
          "detection_id", "created_timestamp"),
         ("/defender/api/security/v1.0/alerts?scenarios=replay", "value",
          "id", "createdDateTime"),
-        ("/netwitness/api/v1/incidents?scenarios=replay", "incidents",
+        ("/rest/api/incidents?scenarios=replay", "items",
          "id", "created"),
     )
     for path, key, id_field, ts_field in cases:
@@ -792,3 +843,4 @@ def test_vendor_prefixes_are_access_log_bound():
     assert '"/crowdstrike"' in src
     assert '"/defender"' in src
     assert '"/netwitness"' in src
+    assert '"/rest"' in src

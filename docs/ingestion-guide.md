@@ -63,7 +63,7 @@ schedule.
 | Humio / Falcon LogScale push integrations | `/logscale/*` | Mirrors Humio REST exactly — `@timestamp`, `@id`, `@rawstring`, `#repo` envelope. |
 | CrowdStrike Falcon vendor pack | `/crowdstrike/*` | Falcon Streaming API envelope (`{meta, resources[]}`) — filters the pool down to `source: CrowdStrike Falcon` scenarios so the Falcon parser sees its own shape. |
 | Microsoft Defender vendor pack | `/defender/*` | Microsoft Graph Security envelope (`{@odata.context, value[]}`) — scenarios with `source: Microsoft Defender…`. |
-| RSA NetWitness vendor pack | `/netwitness/*` | NetWitness SA envelope (`{incidents[], totalItems}`) — the NETWITNESS-A fixture and any future NetWitness-sourced scenarios. |
+| RSA NetWitness vendor pack | `/rest/api/incidents` | NetWitness Respond envelope (`{items[], pageNumber, pageSize, totalPages, totalItems, hasNext, hasPrevious}`) with Respond incident field names — `INC-<n>` id, `title`/`detail`, `riskScore`+`priority`, entities under `events[]`. `/netwitness/api/v1/incidents` is kept as an alias. |
 | Detection content (templates) — alert-shape testing | LogScale / QRadar | Both aggregator surfaces draw from the same 6-template pool; pick the shape your downstream consumer expects. |
 | Multi-source attack-narrative testing (5-alert chains across multiple vendors) | `/qradar/*` with `?scenarios=…` | The QRadar surface exposes the whole 57 scenario library in one envelope, so cross-vendor correlation logic can be exercised end-to-end. |
 | Search-API testing (`/queryjobs`, Ariel) | LogScale / QRadar | LogScale `queryjobs` POST→poll matches Humio; QRadar Ariel matches the IBM async-search shape. |
@@ -80,7 +80,7 @@ NetWitness decoder) that keys off the vendor's actual API envelope
 shape, point that ingestion action at the vendor endpoint. The alert
 payloads are the same — only the outer envelope changes to match
 each vendor's real API. Your parser sees `resources[]` /
-`value[]` / `incidents[]` in the shape it expects. All three
+`value[]` / `items[]` in the shape it expects. All three
 support `?scenarios=all|batch|replay` with per-vendor rotation +
 dedup state (independent of the QRadar counter). Reset a specific
 vendor's state via `POST /_debug/reset_vendor?vendor=crowdstrike`

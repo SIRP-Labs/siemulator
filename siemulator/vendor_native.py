@@ -79,15 +79,101 @@ def _iso_to_ms_epoch(ts: str) -> int:
         return 1_780_000_000_000
 
 
+# Severity label -> NetWitness riskScore (0-100) + priority band.
+# NetWitness Respond scores incidents 0-100 and buckets them into four
+# priority bands; consumers filter on both.
+_NW_RISK: dict[str, tuple[int, str]] = {
+    "critical": (90, "Critical"),
+    "high": (75, "High"),
+    "medium": (50, "Medium"),
+    "low": (25, "Low"),
+    "informational": (10, "Low"),
+}
+
+
+def _as_netwitness_incident(oid: int, sid: str, raw: dict) -> dict:
+    """Reshape a scenario into a NetWitness Respond incident.
+
+    Field names follow the Respond API's incident object as documented
+    at community.netwitness.com — ``id`` is the ``INC-<n>`` string form,
+    the human-readable text lives in ``title`` / ``detail``, severity is
+    expressed as ``riskScore`` + ``priority``, and the entities involved
+    are enumerated under ``events[]`` rather than sitting at top level.
+
+    The full scenario body (``raw_log``, ``parsed``, ``iocs``,
+    ``_test_meta``, ``expected_*``) is preserved alongside so the
+    fixtures stay useful for grading; a real Respond incident would not
+    carry those keys.
+    """
+    sev = str(raw.get("severity", "medium")).lower()
+    risk, priority = _NW_RISK.get(sev, (50, "Medium"))
+    parsed = raw.get("parsed", {}) or {}
+    alert = raw.get("alert", {}) or {}
+    created = raw.get("timestamp", "")
+
+    event = {
+        "source": {
+            "device": {
+                "ipAddress": parsed.get("esrc"),
+                "hostname": parsed.get("esrc_hostname"),
+                "port": parsed.get("spt"),
+            },
+            "user": {"username": parsed.get("suser")},
+        },
+        "destination": {
+            "device": {
+                "ipAddress": parsed.get("edst"),
+                "hostname": parsed.get("edst_hostname"),
+                "port": parsed.get("dpt"),
+            },
+            "user": {"username": parsed.get("duser")},
+        },
+        "domain": parsed.get("edst_hostname"),
+        "eventSource": raw.get("source", "NetWitness"),
+        "eventSourceId": parsed.get("sessionid"),
+        "type": parsed.get("proto", "Network"),
+    }
+
+    out = dict(raw)
+    out.update({
+        "id": f"INC-{oid}",
+        "title": alert.get("name", ""),
+        "detail": alert.get("description", ""),
+        "riskScore": risk,
+        "priority": priority,
+        "status": "New",
+        "created": created,
+        "lastUpdated": created,
+        "type": raw.get("category", ""),
+        "source": raw.get("source", "NetWitness"),
+        "alertCount": 1,
+        "eventCount": 1,
+        "averageAlertRiskScore": risk,
+        "sealed": False,
+        "assignee": None,
+        "categories": raw.get("qradar_categories", []),
+        "events": [event],
+        # Portable identity for consumers written against the int-id
+        # contract the QRadar surface guarantees. Real Respond incidents
+        # have no such field — `id` there is the INC- string above.
+        "_offense_id": oid,
+        "_scenario_id": sid,
+        "start_time": _iso_to_ms_epoch(created),
+    })
+    return out
+
+
 def _scenarios_for_vendor(vendor: str) -> list[dict]:
     """Extract raw_alert dicts for scenarios whose source matches vendor.
 
-    Each returned alert is decorated with:
+    NetWitness gets a full reshape into the Respond incident schema (see
+    ``_as_netwitness_incident``). The other two vendors keep their
+    scenario body at top level, decorated with:
 
     - the vendor's canonical id + timestamp fields (``detection_id`` /
       ``created_timestamp`` for Falcon, ``id`` / ``createdDateTime`` for
-      Graph Security, ``id`` / ``created`` for NetWitness), so a
-      vendor-specific parser finds the identity fields it expects;
+      Graph Security), so a vendor-specific parser finds the identity
+      fields it expects;
     - portable ``id`` (int) + ``start_time`` (int ms-epoch) compatibility
       fields, so generic SIEM-shape consumers that were written against
       the QRadar surface keep working without a second code path.
@@ -100,14 +186,17 @@ def _scenarios_for_vendor(vendor: str) -> list[dict]:
         src = raw.get("source", "")
         if not _vendor_matches(vendor, src):
             continue
+        if vendor == "netwitness":
+            out.append(_as_netwitness_incident(oid, sid, raw))
+            continue
         copy = dict(raw)
         ms = _iso_to_ms_epoch(copy.get("timestamp", ""))
         # Vendor-canonical timestamp field, plus the vendor's own id
         # field when it is named something other than plain ``id``
         # (Falcon's ``detection_id``). Where the vendor's id field IS
-        # ``id`` (Graph Security, NetWitness) the portable int below
-        # fills it — one field can't be both a string GUID and an int,
-        # and the int form is what every consumer here dedups on.
+        # ``id`` (Graph Security) the portable int below fills it — one
+        # field can't be both a string GUID and an int, and the int form
+        # is what every consumer here dedups on.
         copy.setdefault(ts_field, copy.get("timestamp", ""))
         if id_field != "id":
             copy.setdefault(id_field, str(oid))
@@ -224,24 +313,49 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
             "value": picked,
         }
 
+    @router.get("/rest/api/incidents")
     @router.get("/netwitness/api/v1/incidents")
     async def netwitness_incidents(
         request: Request,
         response: Response,
         scenarios: str | None = None,
+        pageSize: int | None = None,  # noqa: N803 — vendor's own param name
+        pageNumber: int | None = None,  # noqa: N803
     ):
-        """NetWitness SA-shape response.
+        """NetWitness Respond-shape response.
 
-        Envelope: ``{"incidents":[...]}`` — mirrors the RSA SA REST API.
+        ``/rest/api/incidents`` is the real Respond API path;
+        ``/netwitness/api/v1/incidents`` is kept as an alias so existing
+        configs keep working.
+
+        Envelope matches the documented Respond paging schema::
+
+            {"items": [...], "pageNumber": 0, "pageSize": N,
+             "totalPages": 1, "totalItems": N,
+             "hasNext": false, "hasPrevious": false}
+
+        ``pageSize`` / ``pageNumber`` are honoured; ``scenarios`` selects
+        the pool the same way it does on every other endpoint.
         """
         _check_token(request, token_getter("netwitness"))
         _stamp(response)
         picked = _pick("netwitness", scenarios)
+
+        total = len(picked)
+        size = pageSize if pageSize and pageSize > 0 else max(total, 1)
+        page = pageNumber if pageNumber and pageNumber > 0 else 0
+        start = page * size
+        window = picked[start:start + size]
+        total_pages = max(1, (total + size - 1) // size)
+
         return {
-            "incidents": picked,
-            "totalItems": len(picked),
-            "page": 0,
-            "size": len(picked),
+            "items": window,
+            "pageNumber": page,
+            "pageSize": size,
+            "totalPages": total_pages,
+            "totalItems": total,
+            "hasNext": page + 1 < total_pages,
+            "hasPrevious": page > 0,
         }
 
     @router.post("/_debug/reset_vendor")

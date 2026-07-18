@@ -14,7 +14,7 @@ EDR/XDR endpoints:
 | `/qradar/*`                              | IBM QRadar (offences + Ariel)                     | `SEC` header, `Bearer`, or `?token=`    |
 | `/crowdstrike/api/v1/detects`            | Falcon Streaming API (`{meta, resources[]}`)      | `Authorization: Bearer` or `?token=`    |
 | `/defender/api/security/v1.0/alerts`     | Microsoft Graph Security (`{@odata.context, value[]}`) | `Authorization: Bearer` or `?token=`    |
-| `/netwitness/api/v1/incidents`           | RSA NetWitness SA (`{incidents[], totalItems}`)   | `Authorization: Bearer` or `?token=`    |
+| `/rest/api/incidents`                    | NetWitness Respond (`{items[], totalItems, …}`)   | `Authorization: Bearer` or `?token=`    |
 
 The QRadar and LogScale surfaces aggregate every scenario in that surface's
 native envelope. The three vendor-native endpoints filter the pool by
@@ -128,7 +128,7 @@ curl "http://localhost:8080/qradar/api/siem/scenarios?token=qradar-dev-token"
 # Vendor-native shapes — same scenario pool, filtered by vendor
 curl "http://localhost:8080/crowdstrike/api/v1/detects?scenarios=replay"        # Falcon envelope
 curl "http://localhost:8080/defender/api/security/v1.0/alerts?scenarios=replay" # Graph Security envelope
-curl "http://localhost:8080/netwitness/api/v1/incidents?scenarios=replay"       # NetWitness SA envelope
+curl "http://localhost:8080/rest/api/incidents?scenarios=replay"                # NetWitness Respond envelope
 ```
 
 ## Configuration
@@ -226,7 +226,8 @@ its own shape.
 | ------ | ------------------------------------------------------- | ---- | ----------------------------------------------------- |
 | GET    | `/crowdstrike/api/v1/detects[?scenarios=…]`             | ✅   | Falcon Streaming API: `{meta, resources[], errors}`   |
 | GET    | `/defender/api/security/v1.0/alerts[?scenarios=…]`      | ✅   | Microsoft Graph Security: `{@odata.context, value[]}` |
-| GET    | `/netwitness/api/v1/incidents[?scenarios=…]`            | ✅   | RSA NetWitness SA: `{incidents[], totalItems, page, size}` |
+| GET    | `/rest/api/incidents[?scenarios=…&pageSize=N&pageNumber=N]` | ✅   | NetWitness Respond: `{items[], pageNumber, pageSize, totalPages, totalItems, hasNext, hasPrevious}` |
+| GET    | `/netwitness/api/v1/incidents`                          | ✅   | Alias for the above (kept for existing configs)       |
 | POST   | `/_debug/reset_vendor?vendor=<v>|all`                   | —    | Clear per-vendor rotation + dedup state               |
 
 All three support the same `?scenarios=all|batch|replay` modes as the

@@ -696,7 +696,7 @@ _HTML_TEMPLATE = """<!doctype html>
         (<strong>Falcon LogScale</strong>, <strong>IBM QRadar</strong>,
         <strong>Splunk Enterprise</strong>) plus vendor-native EDR/XDR
         envelopes (<strong>CrowdStrike Falcon</strong>,
-        <strong>Microsoft Defender</strong>, <strong>RSA NetWitness</strong>).
+        <strong>Microsoft Defender</strong>, <strong>NetWitness Respond</strong>).
         Chaos-engineering and regression-testing primitives baked in.
         <strong>{scenario_count} multi-source attack scenarios</strong>,
         record/replay/diff, real-time SSE push. Zero customer data —
@@ -786,7 +786,7 @@ _HTML_TEMPLATE = """<!doctype html>
     <div class="feature">
       <span class="icon">⚡</span>
       <h3>Six real-vendor REST shapes</h3>
-      <p>SIEM aggregators — Falcon LogScale (Humio REST), IBM QRadar (offences + Ariel), Splunk Enterprise (search jobs + oneshot). Vendor-native EDR/XDR — CrowdStrike Falcon Streaming, Microsoft Defender Graph Security, RSA NetWitness SA. Consumers drop in unchanged — same fields, same envelopes.</p>
+      <p>SIEM aggregators — Falcon LogScale (Humio REST), IBM QRadar (offences + Ariel), Splunk Enterprise (search jobs + oneshot). Vendor-native EDR/XDR — CrowdStrike Falcon Streaming, Microsoft Defender Graph Security, NetWitness Respond. Consumers drop in unchanged — same fields, same envelopes.</p>
     </div>
     <div class="feature">
       <span class="icon">🎯</span>
@@ -1101,7 +1101,8 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
     <li>&nbsp;</li>
     <li><span class="method get">GET</span><span class="path">/crowdstrike/api/v1/detects</span><span class="note">Falcon Streaming envelope (?scenarios=all|batch|replay)</span></li>
     <li><span class="method get">GET</span><span class="path">/defender/api/security/v1.0/alerts</span><span class="note">Microsoft Graph Security envelope</span></li>
-    <li><span class="method get">GET</span><span class="path">/netwitness/api/v1/incidents</span><span class="note">RSA NetWitness SA envelope</span></li>
+    <li><span class="method get">GET</span><span class="path">/rest/api/incidents</span><span class="note">NetWitness Respond envelope (?pageSize=N&amp;pageNumber=N)</span></li>
+    <li><span class="method get">GET</span><span class="path">/netwitness/api/v1/incidents</span><span class="note">alias for /rest/api/incidents</span></li>
     <li><span class="method post">POST</span><span class="path">/_debug/reset_vendor?vendor=&lt;v&gt;|all</span><span class="note">clear per-vendor rotation/dedup</span></li>
     <li>&nbsp;</li>
     <li><span class="method get">GET</span><span class="path">{sp}/services/server/info</span><span class="note">health (no auth)</span></li>
