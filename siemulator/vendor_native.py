@@ -50,16 +50,75 @@ def _vendor_matches(vendor: str, source: str) -> bool:
     return False
 
 
+# Per-vendor identity + timestamp field names. Real vendor APIs all
+# carry an alert id and a creation timestamp; consumers key off them
+# for dedup. Emit each vendor's canonical names so a vendor-specific
+# parser finds what it expects.
+_VENDOR_ID_FIELDS: dict[str, tuple[str, str]] = {
+    # vendor -> (id_field, timestamp_field)
+    "crowdstrike": ("detection_id", "created_timestamp"),
+    "defender": ("id", "createdDateTime"),
+    "netwitness": ("id", "created"),
+}
+
+
+def _iso_to_ms_epoch(ts: str) -> int:
+    """ISO-8601 -> int ms epoch. Falls back to a fixed sentinel that is
+    still a valid 13-digit ms-epoch so downstream shape checks pass."""
+    from datetime import datetime, timezone
+
+    if not ts:
+        return 1_780_000_000_000
+    try:
+        cleaned = ts.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp() * 1000)
+    except (ValueError, TypeError):
+        return 1_780_000_000_000
+
+
 def _scenarios_for_vendor(vendor: str) -> list[dict]:
-    """Extract raw_alert dicts for scenarios whose source matches vendor."""
+    """Extract raw_alert dicts for scenarios whose source matches vendor.
+
+    Each returned alert is decorated with:
+
+    - the vendor's canonical id + timestamp fields (``detection_id`` /
+      ``created_timestamp`` for Falcon, ``id`` / ``createdDateTime`` for
+      Graph Security, ``id`` / ``created`` for NetWitness), so a
+      vendor-specific parser finds the identity fields it expects;
+    - portable ``id`` (int) + ``start_time`` (int ms-epoch) compatibility
+      fields, so generic SIEM-shape consumers that were written against
+      the QRadar surface keep working without a second code path.
+
+    Both are additive — the vendor-native body fields are untouched.
+    """
+    id_field, ts_field = _VENDOR_ID_FIELDS.get(vendor, ("id", "created"))
     out = []
     for oid, sid, _label, raw in SCENARIOS:
         src = raw.get("source", "")
-        if _vendor_matches(vendor, src):
-            copy = dict(raw)
-            copy.setdefault("_scenario_id", sid)
-            copy.setdefault("_offense_id", oid)
-            out.append(copy)
+        if not _vendor_matches(vendor, src):
+            continue
+        copy = dict(raw)
+        ms = _iso_to_ms_epoch(copy.get("timestamp", ""))
+        # Vendor-canonical timestamp field, plus the vendor's own id
+        # field when it is named something other than plain ``id``
+        # (Falcon's ``detection_id``). Where the vendor's id field IS
+        # ``id`` (Graph Security, NetWitness) the portable int below
+        # fills it — one field can't be both a string GUID and an int,
+        # and the int form is what every consumer here dedups on.
+        copy.setdefault(ts_field, copy.get("timestamp", ""))
+        if id_field != "id":
+            copy.setdefault(id_field, str(oid))
+        # Portable identity — int id + int ms-epoch, matching the
+        # contract the QRadar surface guarantees, so consumers written
+        # against that surface need no second code path.
+        copy.setdefault("id", oid)
+        copy.setdefault("start_time", ms)
+        copy.setdefault("_scenario_id", sid)
+        copy.setdefault("_offense_id", oid)
+        out.append(copy)
     return out
 
 

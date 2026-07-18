@@ -72,7 +72,18 @@ def create_app() -> FastAPI:
 
     app.include_router(build_vendor_router(token_getter=_vendor_token))
 
-    bound_prefixes = (logscale_prefix(), qradar_prefix(), splunk_prefix())
+    # Vendor-native prefixes are bound too, so access-log / fault-inject /
+    # session-record cover them the same way they cover the aggregators.
+    # Without this, a consumer polling /crowdstrike/* is invisible in
+    # /api/access-log — which is the surface used to confirm ingestion.
+    bound_prefixes = (
+        logscale_prefix(),
+        qradar_prefix(),
+        splunk_prefix(),
+        "/crowdstrike",
+        "/defender",
+        "/netwitness",
+    )
 
     # Fault injection — middleware for malformed-JSON path, dependency
     # already wired into all three routers for status / latency injection.

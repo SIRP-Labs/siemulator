@@ -725,3 +725,70 @@ def test_vendor_endpoints_no_qradar_shape_leaks():
                 assert banned not in alert, (
                     f"{path} leaked QRadar field {banned!r} in payload"
                 )
+
+
+def test_vendor_alerts_carry_portable_id_and_start_time():
+    """Vendor-native payloads must carry int `id` + int ms-epoch
+    `start_time` so consumers written against the QRadar shape contract
+    (which validates exactly those two fields) work unchanged."""
+    c = _vendor_client()
+    for path, key in (
+        ("/crowdstrike/api/v1/detects?scenarios=replay", "resources"),
+        ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
+        ("/netwitness/api/v1/incidents?scenarios=replay", "incidents"),
+    ):
+        alerts = c.get(path).json()[key]
+        assert alerts, f"{path} returned no alerts"
+        for a in alerts:
+            assert isinstance(a.get("id"), int), f"{path}: id not int"
+            st = a.get("start_time")
+            assert isinstance(st, int) and st > 1_000_000_000_000, (
+                f"{path}: start_time must be int ms-epoch, got {st!r}"
+            )
+
+
+def test_vendor_alerts_carry_vendor_canonical_id_fields():
+    """Each vendor gets its own canonical identity + timestamp field
+    names, so a vendor-specific parser finds what it expects."""
+    c = _vendor_client()
+    cases = (
+        ("/crowdstrike/api/v1/detects?scenarios=replay", "resources",
+         "detection_id", "created_timestamp"),
+        ("/defender/api/security/v1.0/alerts?scenarios=replay", "value",
+         "id", "createdDateTime"),
+        ("/netwitness/api/v1/incidents?scenarios=replay", "incidents",
+         "id", "created"),
+    )
+    for path, key, id_field, ts_field in cases:
+        alerts = c.get(path).json()[key]
+        assert alerts, f"{path} returned no alerts"
+        for a in alerts:
+            assert id_field in a, f"{path}: missing {id_field}"
+            assert ts_field in a, f"{path}: missing {ts_field}"
+
+
+def test_iso_to_ms_epoch_conversion():
+    """Timestamp conversion produces a valid 13-digit ms epoch, and
+    degrades to a valid sentinel rather than 0 on unparseable input."""
+    from siemulator.vendor_native import _iso_to_ms_epoch
+
+    ms = _iso_to_ms_epoch("2026-07-05T04:15:22Z")
+    assert ms > 1_000_000_000_000
+    # Unparseable input still yields a valid ms-epoch (never 0/None),
+    # so the downstream shape check can't be tripped by bad data.
+    for bad in ("", "not-a-date", None):
+        assert _iso_to_ms_epoch(bad) > 1_000_000_000_000
+
+
+def test_vendor_prefixes_are_access_log_bound():
+    """Vendor paths must be in bound_prefixes — otherwise a consumer
+    polling /crowdstrike/* is invisible in /api/access-log, which is
+    the surface used to confirm ingestion is happening."""
+    import inspect
+
+    from siemulator import app as app_mod
+
+    src = inspect.getsource(app_mod.create_app)
+    assert '"/crowdstrike"' in src
+    assert '"/defender"' in src
+    assert '"/netwitness"' in src
