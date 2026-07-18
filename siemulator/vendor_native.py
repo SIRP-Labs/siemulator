@@ -5,22 +5,33 @@ Purpose: OmniSense (and any SOAR) can point per-vendor ingestion
 actions at these endpoints and receive alerts in the exact shape their
 vendor parsers expect. No cross-vendor wrapping.
 
-Endpoints:
-  GET /crowdstrike/api/v1/detects        — Falcon Streaming API resources[]
-  GET /defender/api/security/v1.0/alerts — Graph Security alerts value[]
-  GET /netwitness/api/v1/incidents       — NetWitness SA incidents[]
+Endpoints (each also keeps its original alias path):
+  GET/POST /alerts/entities/alerts/v2  — Falcon Alerts v2 resources[]
+  GET      /v1.0/security/alerts       — Graph Security v1.0 value[]
+  GET      /rest/api/incidents         — NetWitness Respond items[]
 
-Each endpoint filters the scenario pool by ``_raw_alert.source`` and
-returns just those scenarios' raw payloads wrapped in the vendor's
-canonical API envelope. Supports ``?scenarios=all|batch|replay``
-(same semantics as the QRadar endpoint). Uses token via ``?token=``
-matching each vendor's env var.
+Each endpoint filters the scenario pool by ``source`` and reshapes the
+matching scenarios into that vendor's documented model, inside that
+vendor's documented envelope. Supports ``?scenarios=all|batch|replay``
+(same semantics as the QRadar endpoint) with per-vendor rotation and
+dedup state. Token via ``?token=`` or Bearer, matched against each
+vendor's ``SIEMULATOR_<VENDOR>_TOKEN`` env var (unset = no auth).
 
-Note on payload shape: the ``_raw_alert`` bodies are already
-vendor-flavoured (Falcon-ish, Defender-ish, etc.) but not always
-byte-exact to the real vendor API. Deep-native reformat lives in
-follow-up work; this endpoint at least stops mis-wrapping in QRadar
-shape, which was the blocker for OmniSense's vendor-native parsers.
+Schema provenance — field names were taken from each vendor's own
+generated models rather than from memory:
+  Falcon      DetectsAlert + DetectsapiPostEntitiesAlertsV2Response
+              (CrowdStrike/gofalcon)
+  Graph       Alert + UserSecurityState / HostSecurityState /
+              NetworkConnection / Process / FileSecurityState
+              (microsoftgraph/msgraph-sdk-dotnet)
+  NetWitness  Respond incident + paging envelope
+              (community.netwitness.com)
+
+Each reshaped alert keeps the original scenario body alongside
+(``raw_log`` / ``parsed`` / ``iocs`` / ``_test_meta``) so the fixtures
+stay gradeable; a real vendor alert would not carry those keys.
+Vendor ids are strings, so the portable int identity lives on
+``_offense_id`` and ``start_time`` carries an int ms-epoch.
 """
 
 from __future__ import annotations
@@ -295,6 +306,259 @@ def _as_crowdstrike_alert(oid: int, sid: str, raw: dict) -> dict:
     return out
 
 
+def _split_domain_user(value: str) -> tuple[str, str]:
+    """``DOMAIN\\user`` -> ``("DOMAIN", "user")``. Returns an empty
+    domain when the value carries no domain part."""
+    v = str(value or "")
+    if "\\" in v:
+        dom, _, usr = v.partition("\\")
+        return dom, usr
+    return "", v
+
+
+def _as_defender_alert(oid: int, sid: str, raw: dict) -> dict:
+    """Reshape a scenario into a Microsoft Graph Security v1.0 ``alert``.
+
+    Field names follow the ``Alert`` entity as generated in
+    microsoftgraph/msgraph-sdk-dotnet, together with its nested state
+    models — ``userStates[]`` (UserSecurityState), ``hostStates[]``
+    (HostSecurityState), ``networkConnections[]`` (NetworkConnection),
+    ``processes[]`` (Process), ``fileStates[]`` (FileSecurityState) and
+    ``vendorInformation`` (SecurityVendorInformation).
+
+    Severity is Graph's enum (``informational|low|medium|high``) and
+    status is ``newAlert|inProgress|resolved|unknown`` — both differ
+    from the label the scenario carries.
+
+    Scenario bodies come in two shapes — some carry ``detection`` /
+    ``host`` / ``process`` sub-objects, others a flat ``parsed`` dict
+    from a raw-log fixture — so both are read. The original body is
+    preserved alongside so the fixtures stay gradeable; a real Graph
+    alert would not carry ``raw_log`` / ``parsed`` / ``_test_meta``.
+    """
+    parsed = raw.get("parsed", {}) or {}
+    detection = raw.get("detection", {}) or {}
+    alert = raw.get("alert", {}) or {}
+    host = raw.get("host", {}) or {}
+    proc = raw.get("process", {}) or {}
+    user = raw.get("user", {}) or {}
+    network = raw.get("network", {}) or {}
+    ts = raw.get("timestamp", "")
+
+    # A scenario may already carry a hand-authored Graph body at
+    # raw_log.body — those are richer than anything synthesised from the
+    # generic sub-objects (multiple entries per state array, real SIDs,
+    # logon ids). Prefer it wholesale and only fill in what it omits.
+    prebuilt = raw.get("raw_log", {}).get("body")
+    if isinstance(prebuilt, dict) and "vendorInformation" in prebuilt:
+        out = dict(raw)
+        out.update(prebuilt)
+        # Graph's Process model carries hashes as a FileHash sub-object,
+        # not as flat md5 / sha256 keys. Author-supplied bodies tend to
+        # write the flat form, so derive the canonical fileHash from it.
+        # Both are kept: a Graph-schema parser reads fileHash, and any
+        # consumer written against the flat form keeps working.
+        for p in out.get("processes", []) or []:
+            if isinstance(p, dict) and not p.get("fileHash"):
+                for key, htype in (("sha256", "sha256"), ("md5", "md5")):
+                    if p.get(key):
+                        p["fileHash"] = {"hashType": htype, "hashValue": p[key]}
+                        break
+        for k in ("userStates", "hostStates", "networkConnections",
+                  "processes", "fileStates", "malwareStates",
+                  "cloudAppStates", "registryKeyStates", "triggers",
+                  "recommendedActions", "sourceMaterials", "comments"):
+            out.setdefault(k, [])
+        out.setdefault("confidence", raw.get("confidence", 50))
+        out.setdefault("lastModifiedDateTime", prebuilt.get("createdDateTime", ts))
+        out.setdefault("lastEventDateTime", prebuilt.get("eventDateTime", ts))
+        out.setdefault("closedDateTime", None)
+        out.setdefault("assignedTo", None)
+        out.setdefault("feedback", None)
+        out.setdefault("tags", [sid])
+        out.setdefault("detectionIds", [str(prebuilt.get("id", oid))])
+        out.setdefault("incidentIds", [])
+        out["_offense_id"] = oid
+        out["_scenario_id"] = sid
+        out["start_time"] = _iso_to_ms_epoch(
+            prebuilt.get("createdDateTime") or ts
+        )
+        return out
+
+    # Graph's severity enum is lowercase and has no "critical" band —
+    # critical maps onto high.
+    sev_raw = str(raw.get("severity", "medium")).lower()
+    severity = {"critical": "high", "informational": "informational"}.get(
+        sev_raw, sev_raw if sev_raw in ("low", "medium", "high") else "medium"
+    )
+
+    title = detection.get("name") or alert.get("name") or ""
+    description = detection.get("description") or alert.get("description") or ""
+
+    # ── userStates[] ────────────────────────────────────────────────
+    raw_user = (
+        user.get("username")
+        or parsed.get("user")
+        or parsed.get("user_name")
+        or ""
+    )
+    domain, account = _split_domain_user(raw_user)
+    user_states = []
+    if account:
+        user_states.append({
+            "accountName": account,
+            "domainName": domain,
+            "userPrincipalName": f"{account}@{domain.lower()}.local" if domain else account,
+            "logonIp": host.get("ip") or parsed.get("src") or "",
+            "logonDateTime": ts,
+            "userAccountType": "standard",
+            "riskScore": None,
+        })
+
+    # ── hostStates[] ────────────────────────────────────────────────
+    hostname = (
+        host.get("hostname")
+        or parsed.get("device_hostname")
+        or parsed.get("computer")
+        or ""
+    )
+    host_states = []
+    if hostname:
+        host_states.append({
+            "fqdn": hostname,
+            "netBiosName": hostname.split(".")[0],
+            "privateIpAddress": host.get("ip") or parsed.get("src") or "",
+            "publicIpAddress": parsed.get("external_ip", ""),
+            "os": "Windows",
+            "isAzureAdJoined": True,
+            "isAzureAdRegistered": True,
+            "isHybridAzureDomainJoined": False,
+            "riskScore": str(host.get("s3_score", "")) or None,
+        })
+
+    # ── networkConnections[] ────────────────────────────────────────
+    conns = network.get("connections") or []
+    if not conns and (network.get("remote_ip") or parsed.get("dst")):
+        conns = [{
+            "remote_ip": network.get("remote_ip") or parsed.get("dst"),
+            "remote_port": network.get("remote_port") or parsed.get("dport"),
+            "remote_domain": network.get("domain") or parsed.get("misc_queried_domain"),
+        }]
+    network_connections = [
+        {
+            "destinationAddress": c.get("remote_ip") or c.get("destinationAddress", ""),
+            "destinationPort": str(c.get("remote_port", "") or ""),
+            "destinationDomain": c.get("remote_domain", "") or "",
+            "destinationUrl": c.get("url", "") or "",
+            "sourceAddress": host.get("ip") or parsed.get("src") or "",
+            "sourcePort": str(parsed.get("sport", "") or ""),
+            "protocol": (parsed.get("proto") or "tcp"),
+            "direction": "outbound",
+            "applicationName": proc.get("name", ""),
+            "status": "attempted",
+        }
+        for c in conns
+    ]
+
+    # ── processes[] + fileStates[] ──────────────────────────────────
+    p_name = (
+        proc.get("name")
+        or parsed.get("process_name")
+        or (parsed.get("process", {}) or {}).get("filename", "")
+    )
+    p_sha = (
+        proc.get("sha256")
+        or parsed.get("process_sha256")
+        or (parsed.get("process", {}) or {}).get("sha256", "")
+    )
+    p_md5 = proc.get("md5") or parsed.get("loaded_dll_md5") or ""
+    p_cmd = (
+        proc.get("command_line")
+        or parsed.get("command_line")
+        or (parsed.get("process", {}) or {}).get("cmdline", "")
+    )
+    p_path = proc.get("path") or parsed.get("loaded_dll_path") or ""
+
+    processes = []
+    if p_name:
+        processes.append({
+            "name": p_name,
+            "path": p_path,
+            "commandLine": p_cmd,
+            "accountName": account,
+            "createdDateTime": ts,
+            "processId": parsed.get("process_id"),
+            "parentProcessName": (
+                proc.get("parent")
+                or parsed.get("parent_process")
+                or (parsed.get("process", {}) or {}).get("parent_process", "")
+            ),
+            "parentProcessId": parsed.get("parent_process_id"),
+            "integrityLevel": "medium",
+            "isElevated": False,
+            "fileHash": (
+                {"hashType": "sha256", "hashValue": p_sha} if p_sha else None
+            ),
+        })
+
+    file_states = []
+    for hval, htype in ((p_sha, "sha256"), (p_md5, "md5")):
+        if hval:
+            file_states.append({
+                "name": p_name,
+                "path": p_path,
+                "fileHash": {"hashType": htype, "hashValue": hval},
+                "riskScore": None,
+            })
+
+    out = dict(raw)
+    out.update({
+        "id": str(oid),
+        "azureTenantId": _CS_CID,
+        "title": title,
+        "description": description,
+        "category": raw.get("category", ""),
+        "severity": severity,
+        "status": "newAlert",
+        "confidence": raw.get("confidence", 50),
+        "createdDateTime": ts,
+        "eventDateTime": ts,
+        "lastModifiedDateTime": ts,
+        "lastEventDateTime": ts,
+        "closedDateTime": None,
+        "assignedTo": None,
+        "feedback": None,
+        "activityGroupName": None,
+        "vendorInformation": {
+            "provider": "Microsoft Defender ATP",
+            "providerVersion": "1.0",
+            "subProvider": None,
+            "vendor": "Microsoft",
+        },
+        "userStates": user_states,
+        "hostStates": host_states,
+        "networkConnections": network_connections,
+        "processes": processes,
+        "fileStates": file_states,
+        "malwareStates": [],
+        "cloudAppStates": [],
+        "registryKeyStates": [],
+        "triggers": [],
+        "recommendedActions": [],
+        "sourceMaterials": [],
+        "comments": [],
+        "tags": [sid],
+        "detectionIds": [str(oid)],
+        "incidentIds": [],
+        # Portable identity — Graph's `id` is a string, so the int lives
+        # here for consumers written against the int-id contract.
+        "_offense_id": oid,
+        "_scenario_id": sid,
+        "start_time": _iso_to_ms_epoch(ts),
+    })
+    return out
+
+
 def _as_netwitness_incident(oid: int, sid: str, raw: dict) -> dict:
     """Reshape a scenario into a NetWitness Respond incident.
 
@@ -395,6 +659,9 @@ def _scenarios_for_vendor(vendor: str) -> list[dict]:
             continue
         if vendor == "crowdstrike":
             out.append(_as_crowdstrike_alert(oid, sid, raw))
+            continue
+        if vendor == "defender":
+            out.append(_as_defender_alert(oid, sid, raw))
             continue
         copy = dict(raw)
         ms = _iso_to_ms_epoch(copy.get("timestamp", ""))
@@ -524,15 +791,30 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
             "errors": [],
         }
 
+    @router.get("/v1.0/security/alerts")
     @router.get("/defender/api/security/v1.0/alerts")
     async def defender_alerts(
         request: Request,
         response: Response,
         scenarios: str | None = None,
     ):
-        """Microsoft Graph Security-shape response.
+        """Microsoft Graph Security v1.0 ``alert`` collection.
 
-        Envelope: ``{"@odata.context":..., "value":[...]}``.
+        ``/v1.0/security/alerts`` is the real Graph path;
+        ``/defender/api/security/v1.0/alerts`` is kept as an alias so
+        existing configs keep working.
+
+        Envelope is Graph's OData collection response::
+
+            {"@odata.context": "https://graph.microsoft.com/v1.0/
+                                $metadata#Security/alerts",
+             "@odata.count": N,
+             "value": [alert, ...]}
+
+        Each alert follows the Graph ``Alert`` entity — camelCase
+        fields, ``vendorInformation``, and the nested state collections
+        (``userStates`` / ``hostStates`` / ``networkConnections`` /
+        ``processes`` / ``fileStates``).
         """
         _check_token(request, token_getter("defender"))
         _stamp(response)
@@ -541,6 +823,7 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
             "@odata.context": (
                 "https://graph.microsoft.com/v1.0/$metadata#Security/alerts"
             ),
+            "@odata.count": len(picked),
             "value": picked,
         }
 

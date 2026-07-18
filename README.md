@@ -13,7 +13,7 @@ EDR/XDR endpoints:
 | `/logscale/*`                            | Falcon LogScale (Humio REST API)                  | `Authorization: Bearer` or `?token=`    |
 | `/qradar/*`                              | IBM QRadar (offences + Ariel)                     | `SEC` header, `Bearer`, or `?token=`    |
 | `/alerts/entities/alerts/v2`             | Falcon Alerts v2 (`{meta, resources[], errors[]}`) | `Authorization: Bearer` or `?token=`    |
-| `/defender/api/security/v1.0/alerts`     | Microsoft Graph Security (`{@odata.context, value[]}`) | `Authorization: Bearer` or `?token=`    |
+| `/v1.0/security/alerts`                  | Graph Security v1.0 (`{@odata.context, @odata.count, value[]}`) | `Authorization: Bearer` or `?token=`    |
 | `/rest/api/incidents`                    | NetWitness Respond (`{items[], totalItems, …}`)   | `Authorization: Bearer` or `?token=`    |
 
 The QRadar and LogScale surfaces aggregate every scenario in that surface's
@@ -127,7 +127,7 @@ curl "http://localhost:8080/qradar/api/siem/scenarios?token=qradar-dev-token"
 
 # Vendor-native shapes — same scenario pool, filtered by vendor
 curl "http://localhost:8080/alerts/entities/alerts/v2?scenarios=replay"          # Falcon Alerts v2 envelope
-curl "http://localhost:8080/defender/api/security/v1.0/alerts?scenarios=replay" # Graph Security envelope
+curl "http://localhost:8080/v1.0/security/alerts?scenarios=replay"               # Graph Security envelope
 curl "http://localhost:8080/rest/api/incidents?scenarios=replay"                # NetWitness Respond envelope
 ```
 
@@ -226,7 +226,8 @@ its own shape.
 | ------ | ------------------------------------------------------- | ---- | ----------------------------------------------------- |
 | GET/POST | `/alerts/entities/alerts/v2[?scenarios=…&limit=N&offset=N]` | ✅ | Falcon Alerts v2: `{meta{pagination,writes}, resources[], errors[]}` — resources follow the `DetectsAlert` model |
 | GET    | `/crowdstrike/api/v1/detects`                           | ✅   | Alias for the above (kept for existing configs)      |
-| GET    | `/defender/api/security/v1.0/alerts[?scenarios=…]`      | ✅   | Microsoft Graph Security: `{@odata.context, value[]}` |
+| GET    | `/v1.0/security/alerts[?scenarios=…]`                   | ✅   | Graph Security v1.0: `{@odata.context, @odata.count, value[]}` — alerts follow the `Alert` entity |
+| GET    | `/defender/api/security/v1.0/alerts`                    | ✅   | Alias for the above (kept for existing configs)      |
 | GET    | `/rest/api/incidents[?scenarios=…&pageSize=N&pageNumber=N]` | ✅   | NetWitness Respond: `{items[], pageNumber, pageSize, totalPages, totalItems, hasNext, hasPrevious}` |
 | GET    | `/netwitness/api/v1/incidents`                          | ✅   | Alias for the above (kept for existing configs)       |
 | POST   | `/_debug/reset_vendor?vendor=<v>|all`                   | —    | Clear per-vendor rotation + dedup state               |

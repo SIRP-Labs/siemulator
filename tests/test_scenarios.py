@@ -726,21 +726,6 @@ def test_crowdstrike_paging_honours_limit_offset():
     assert body["meta"]["pagination"]["total"] >= len(body["resources"])
 
 
-def test_defender_endpoint_returns_graph_envelope():
-    """/defender/api/security/v1.0/alerts returns Graph Security shape
-    ({@odata.context, value})."""
-    c = _vendor_client()
-    r = c.get("/defender/api/security/v1.0/alerts?scenarios=replay")
-    assert r.status_code == 200
-    body = r.json()
-    assert "@odata.context" in body
-    assert "graph.microsoft.com" in body["@odata.context"]
-    assert isinstance(body["value"], list)
-    assert body["value"], "no Defender scenarios matched"
-    for alert in body["value"]:
-        assert "defender" in alert["source"].lower()
-
-
 def test_netwitness_endpoint_returns_respond_envelope():
     """Both NetWitness paths return the documented Respond paging
     envelope: items[] plus the full pageNumber/pageSize/totalPages/
@@ -818,7 +803,7 @@ def test_vendor_endpoints_no_qradar_shape_leaks():
     c = _vendor_client()
     for path, key in (
         ("/alerts/entities/alerts/v2?scenarios=replay", "resources"),
-        ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
+        ("/v1.0/security/alerts?scenarios=replay", "value"),
         ("/rest/api/incidents?scenarios=replay", "items"),
     ):
         r = c.get(path)
@@ -843,7 +828,7 @@ def test_vendor_alerts_carry_portable_id_and_start_time():
     c = _vendor_client()
     for path, key in (
         ("/alerts/entities/alerts/v2?scenarios=replay", "resources"),
-        ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
+        ("/v1.0/security/alerts?scenarios=replay", "value"),
         ("/rest/api/incidents?scenarios=replay", "items"),
     ):
         alerts = c.get(path).json()[key]
@@ -906,3 +891,149 @@ def test_vendor_prefixes_are_access_log_bound():
     assert '"/netwitness"' in src
     assert '"/rest"' in src
     assert '"/alerts"' in src
+    assert '"/v1.0"' in src
+
+
+def test_defender_endpoint_returns_graph_odata_envelope():
+    """Both Graph paths return the OData collection envelope with
+    @odata.context, @odata.count and value[]."""
+    c = _vendor_client()
+    for path in ("/v1.0/security/alerts", "/defender/api/security/v1.0/alerts"):
+        r = c.get(f"{path}?scenarios=replay")
+        assert r.status_code == 200, path
+        body = r.json()
+        assert "graph.microsoft.com" in body["@odata.context"], path
+        assert body["@odata.count"] == len(body["value"]), path
+        assert body["value"], f"{path} returned no alerts"
+
+
+def test_defender_alert_uses_graph_v1_field_names():
+    """Alerts follow the Graph Security v1.0 `alert` entity: camelCase
+    fields, Graph's severity/status enums, vendorInformation, and the
+    nested state collections the Defender pack keys off."""
+    c = _vendor_client()
+    a = c.get("/v1.0/security/alerts?scenarios=replay").json()["value"][0]
+
+    # Core entity fields
+    for k in ("id", "azureTenantId", "title", "description", "category",
+              "severity", "status", "createdDateTime", "eventDateTime",
+              "lastModifiedDateTime", "vendorInformation"):
+        assert k in a, f"missing Graph field {k}"
+
+    # Graph's enums — not the scenario's own labels
+    assert a["severity"] in ("informational", "low", "medium", "high")
+    assert a["status"] in ("newAlert", "inProgress", "resolved", "unknown")
+
+    # vendorInformation carries provider — the field the Defender pack
+    # dispatches on
+    vi = a["vendorInformation"]
+    assert vi["provider"] == "Microsoft Defender ATP"
+    assert vi["vendor"] == "Microsoft"
+
+    # Nested state collections must all be present as lists
+    for k in ("userStates", "hostStates", "networkConnections", "processes",
+              "fileStates", "malwareStates", "cloudAppStates",
+              "registryKeyStates", "triggers", "recommendedActions"):
+        assert isinstance(a[k], list), f"{k} must be a list"
+
+
+def test_defender_nested_states_use_graph_sub_model_fields():
+    """Every key inside a nested state entry must be a real field on the
+    corresponding Graph sub-model. Graph treats these fields as optional,
+    so the pin is on the *vocabulary* (no invented names) rather than on
+    any field being present."""
+    c = _vendor_client()
+    alerts = c.get("/v1.0/security/alerts?scenarios=replay").json()["value"]
+
+    # Field sets taken from the generated models in
+    # microsoftgraph/msgraph-sdk-dotnet.
+    allowed = {
+        "userStates": {
+            "aadUserId", "accountName", "domainName", "emailRole", "isVpn",
+            "logonDateTime", "logonId", "logonIp", "logonLocation",
+            "logonType", "onPremisesSecurityIdentifier", "riskScore",
+            "userAccountType", "userPrincipalName",
+        },
+        "hostStates": {
+            "fqdn", "isAzureAdJoined", "isAzureAdRegistered",
+            "isHybridAzureDomainJoined", "netBiosName", "os",
+            "privateIpAddress", "publicIpAddress", "riskScore",
+        },
+        "networkConnections": {
+            "applicationName", "destinationAddress", "destinationDomain",
+            "destinationLocation", "destinationPort", "destinationUrl",
+            "direction", "domainRegisteredDateTime", "localDnsName",
+            "natDestinationAddress", "natDestinationPort",
+            "natSourceAddress", "natSourcePort", "protocol", "riskScore",
+            "sourceAddress", "sourceLocation", "sourcePort", "status",
+            "urlParameters",
+        },
+        "processes": {
+            "accountName", "commandLine", "createdDateTime", "fileHash",
+            "integrityLevel", "isElevated", "name",
+            "parentProcessCreatedDateTime", "parentProcessId",
+            "parentProcessName", "path", "processId",
+            # Flat hashes are not on Graph's Process model, but the
+            # Defender pack spec asked for them, so they are emitted
+            # alongside the canonical fileHash. Allowed by exception.
+            "md5", "sha256",
+        },
+        "fileStates": {"fileHash", "name", "path", "riskScore"},
+    }
+
+    seen = set()
+    for a in alerts:
+        for coll, fields in allowed.items():
+            for entry in a.get(coll, []):
+                bad = set(entry) - fields
+                assert not bad, f"{coll} has non-Graph field(s): {sorted(bad)}"
+                seen.add(coll)
+                # FileHash sub-model is {hashType, hashValue}
+                fh = entry.get("fileHash")
+                if isinstance(fh, dict):
+                    assert set(fh) <= {"hashType", "hashValue"}, (
+                        f"{coll}.fileHash has non-Graph field(s): "
+                        f"{sorted(set(fh) - {'hashType', 'hashValue'})}"
+                    )
+
+    # All five collections must be exercised somewhere in the corpus,
+    # else this pin silently passes on empty data.
+    assert seen == set(allowed), f"never exercised: {set(allowed) - seen}"
+
+
+def test_defender_process_flat_hashes_get_canonical_filehash():
+    """Where a process entry carries flat md5 / sha256, the canonical
+    Graph FileHash sub-object must be derived from it — so a
+    schema-strict parser finds fileHash while a consumer written
+    against the flat form still works."""
+    c = _vendor_client()
+    alerts = c.get("/v1.0/security/alerts?scenarios=replay").json()["value"]
+    checked = 0
+    for a in alerts:
+        for p in a.get("processes", []):
+            if p.get("sha256") or p.get("md5"):
+                fh = p.get("fileHash")
+                assert isinstance(fh, dict), "flat hash without fileHash"
+                assert fh["hashValue"] in (p.get("sha256"), p.get("md5"))
+                assert fh["hashType"] in ("sha256", "md5")
+                checked += 1
+    assert checked, "no process carried a flat hash — pin never exercised"
+
+
+def test_defender_a_preserves_hand_authored_graph_body():
+    """DEFENDER-A carries a hand-authored Graph body with >=2 entries in
+    every state array (the shape the Defender pack was specified
+    against). The reshape must surface that body wholesale rather than
+    synthesising a thinner one from the generic sub-objects."""
+    c = _vendor_client()
+    alerts = c.get("/v1.0/security/alerts?scenarios=replay").json()["value"]
+    a = next(x for x in alerts if x.get("_scenario_id") == "DEFENDER-A")
+
+    for k in ("userStates", "hostStates", "networkConnections",
+              "processes", "fileStates"):
+        assert len(a[k]) >= 2, f"{k} should keep >=2 entries, got {len(a[k])}"
+
+    # The richer detail from the hand-authored body must survive
+    assert a["vendorInformation"]["subProvider"] == "MDATP"
+    assert any(u.get("onPremisesSecurityIdentifier") for u in a["userStates"])
+    assert any(h.get("fqdn") == "DC01.corp.local" for h in a["hostStates"])
