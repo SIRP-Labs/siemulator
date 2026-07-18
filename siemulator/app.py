@@ -84,6 +84,7 @@ def create_app() -> FastAPI:
         "/defender",
         "/netwitness",
         "/rest",
+        "/alerts",
     )
 
     # Fault injection — middleware for malformed-JSON path, dependency

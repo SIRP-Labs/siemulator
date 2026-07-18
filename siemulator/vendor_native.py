@@ -91,6 +91,210 @@ _NW_RISK: dict[str, tuple[int, str]] = {
 }
 
 
+# Severity label -> Falcon's numeric severity. CrowdStrike scores
+# alerts 0-100 on ``severity`` and mirrors the band in ``severity_name``.
+_CS_SEVERITY: dict[str, int] = {
+    "critical": 90,
+    "high": 70,
+    "medium": 50,
+    "low": 30,
+    "informational": 10,
+}
+
+# Stable synthetic tenant + agent ids. Real Falcon uses 32-char hex for
+# both; ``composite_id`` is ``<cid>:ind:<agent_id>:<local_id>``.
+_CS_CID = "0123456789abcdef0123456789abcdef"
+
+
+def _cs_agent_id(oid: int) -> str:
+    """Deterministic 32-hex agent id derived from the offence id, so the
+    same scenario always reports the same sensor."""
+    return f"{oid:032x}"
+
+
+# MITRE tactic name -> id, for the handful the scenario corpus uses.
+_MITRE_TACTIC_IDS: dict[str, str] = {
+    "Initial Access": "TA0001",
+    "Execution": "TA0002",
+    "Persistence": "TA0003",
+    "Privilege Escalation": "TA0004",
+    "Defense Evasion": "TA0005",
+    "Credential Access": "TA0006",
+    "Discovery": "TA0007",
+    "Lateral Movement": "TA0008",
+    "Collection": "TA0009",
+    "Command and Control": "TA0011",
+    "Exfiltration": "TA0010",
+    "Impact": "TA0040",
+}
+
+
+def _as_crowdstrike_alert(oid: int, sid: str, raw: dict) -> dict:
+    """Reshape a scenario into a Falcon Alerts v2 ``DetectsAlert``.
+
+    Field names follow CrowdStrike's own generated model
+    (``DetectsAlert`` in CrowdStrike/gofalcon), which is produced from
+    their published OpenAPI spec. Identity is the ``composite_id``
+    (``<cid>:ind:<agent_id>:<local>``) that the v2 API keys on;
+    severity is a 0-100 int with the band mirrored in ``severity_name``;
+    ATT&CK data appears both flat (``tactic`` / ``technique`` /
+    ``tactic_id`` / ``technique_id``) and under ``mitre_attack[]``.
+
+    Scenario bodies come in two shapes — some carry ``detection`` /
+    ``host`` / ``process`` sub-objects, others a flat ``parsed`` dict
+    from a raw-log fixture — so both are read.
+
+    The original scenario body is preserved alongside so the fixtures
+    stay gradeable; a real Falcon alert would not carry ``raw_log`` /
+    ``parsed`` / ``iocs`` / ``_test_meta``.
+    """
+    parsed = raw.get("parsed", {}) or {}
+    detection = raw.get("detection", {}) or {}
+    alert = raw.get("alert", {}) or {}
+    host = raw.get("host", {}) or {}
+    proc = raw.get("process", {}) or {}
+    user = raw.get("user", {}) or {}
+
+    sev_name = str(raw.get("severity", "Medium"))
+    severity = _CS_SEVERITY.get(sev_name.lower(), 50)
+    ts = raw.get("timestamp", "")
+
+    name = (
+        detection.get("name")
+        or alert.get("name")
+        or parsed.get("signature_name")
+        or ""
+    )
+    description = detection.get("description") or alert.get("description") or ""
+
+    technique_id = (
+        detection.get("technique")
+        or parsed.get("mitre_technique")
+        or ""
+    )
+    tactic = detection.get("tactic") or parsed.get("mitre_tactic") or "Execution"
+    tactic_id = _MITRE_TACTIC_IDS.get(tactic, "TA0002")
+
+    filename = (
+        proc.get("name")
+        or parsed.get("process_name")
+        or (parsed.get("process", {}) or {}).get("filename", "")
+    )
+    filepath = proc.get("path") or parsed.get("loaded_dll_path") or ""
+    cmdline = (
+        proc.get("command_line")
+        or parsed.get("command_line")
+        or (parsed.get("process", {}) or {}).get("cmdline", "")
+    )
+    sha256 = (
+        proc.get("sha256")
+        or parsed.get("process_sha256")
+        or (parsed.get("process", {}) or {}).get("sha256", "")
+    )
+    md5 = proc.get("md5") or parsed.get("loaded_dll_md5") or ""
+
+    hostname = (
+        host.get("hostname")
+        or parsed.get("device_hostname")
+        or parsed.get("computer")
+        or parsed.get("device_host")
+        or ""
+    )
+    local_ip = host.get("ip") or parsed.get("device_ip") or parsed.get("src") or ""
+    username = user.get("username") or parsed.get("user") or ""
+    logon_domain = ""
+    if "\\" in str(username):
+        logon_domain, _, username = str(username).partition("\\")
+
+    agent_id = _cs_agent_id(oid)
+    composite_id = f"{_CS_CID}:ind:{agent_id}:{oid}"
+
+    mitre = []
+    if technique_id:
+        mitre.append({
+            "pattern_id": oid,
+            "tactic": tactic,
+            "tactic_id": tactic_id,
+            "technique": name,
+            "technique_id": technique_id,
+        })
+
+    out = dict(raw)
+    out.update({
+        # Identity — composite_id is what the v2 API's `ids` param takes
+        "composite_id": composite_id,
+        "id": composite_id,
+        "aggregate_id": f"aggind:{agent_id}:{oid}",
+        "agent_id": agent_id,
+        "cid": _CS_CID,
+        "device_id": agent_id,
+        # Timestamps
+        "created_timestamp": ts,
+        "updated_timestamp": ts,
+        "timestamp": ts,
+        "crawled_timestamp": ts,
+        "context_timestamp": ts,
+        # Text
+        "name": name,
+        "display_name": name,
+        "description": description,
+        # Scoring
+        "severity": severity,
+        "severity_name": sev_name,
+        "confidence": raw.get("confidence", 50),
+        # ATT&CK
+        "tactic": tactic,
+        "tactic_id": tactic_id,
+        "technique": name,
+        "technique_id": technique_id,
+        "objective": "Falcon Detection Method",
+        "scenario": sid.lower().replace("-", "_"),
+        "mitre_attack": mitre,
+        # Classification
+        "product": "epp",
+        "type": "ldt",
+        "pattern_id": oid,
+        "pattern_disposition": 0,
+        "pattern_disposition_description": "Detection, standard detection.",
+        # Triage state
+        "status": "new",
+        "show_in_ui": True,
+        "assigned_to_name": None,
+        "assigned_to_uid": None,
+        # Process
+        "filename": filename,
+        "filepath": filepath,
+        "cmdline": cmdline,
+        "sha256": sha256,
+        "md5": md5,
+        "parent_process_id": None,
+        # Host
+        "hostname": hostname,
+        "local_ip": local_ip,
+        "external_ip": "",
+        "platform": "Windows",
+        "platform_name": "Windows",
+        "machine_domain": logon_domain,
+        # User
+        "user_name": username,
+        "logon_domain": logon_domain,
+        # Provenance
+        "data_domains": ["Endpoint"],
+        "source_products": ["Falcon Insight"],
+        "source_vendors": ["CrowdStrike"],
+        "falcon_host_link": (
+            f"https://falcon.crowdstrike.com/activity-v2/detections/{composite_id}"
+        ),
+        # Portable identity — Falcon's `id` is the composite string, so
+        # the int lives here for consumers written against the QRadar
+        # int-id contract.
+        "_offense_id": oid,
+        "_scenario_id": sid,
+        "start_time": _iso_to_ms_epoch(ts),
+    })
+    return out
+
+
 def _as_netwitness_incident(oid: int, sid: str, raw: dict) -> dict:
     """Reshape a scenario into a NetWitness Respond incident.
 
@@ -189,6 +393,9 @@ def _scenarios_for_vendor(vendor: str) -> list[dict]:
         if vendor == "netwitness":
             out.append(_as_netwitness_incident(oid, sid, raw))
             continue
+        if vendor == "crowdstrike":
+            out.append(_as_crowdstrike_alert(oid, sid, raw))
+            continue
         copy = dict(raw)
         ms = _iso_to_ms_epoch(copy.get("timestamp", ""))
         # Vendor-canonical timestamp field, plus the vendor's own id
@@ -267,29 +474,53 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
     """
     router = APIRouter()
 
+    @router.get("/alerts/entities/alerts/v2")
+    @router.post("/alerts/entities/alerts/v2")
     @router.get("/crowdstrike/api/v1/detects")
-    async def crowdstrike_detects(
+    async def crowdstrike_alerts_v2(
         request: Request,
         response: Response,
         scenarios: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ):
-        """Falcon Streaming API-shape response.
+        """Falcon Alerts v2-shape response.
 
-        Envelope: ``{"meta":{"query_time":...}, "resources":[...]}``.
-        Each resource is a scenario's ``_raw_alert`` — the raw
-        detection body already carries Falcon-style fields
-        (device, process, behaviours, iocs, ...).
+        ``/alerts/entities/alerts/v2`` is the real Alerts v2 path (the
+        live API takes POST with an ``ids`` body; GET is accepted here
+        too since siemulator has no id-query step).
+        ``/crowdstrike/api/v1/detects`` is kept as an alias.
+
+        Envelope matches ``DetectsapiPostEntitiesAlertsV2Response``::
+
+            {"meta": {"query_time":…, "powered_by":…, "trace_id":…,
+                      "writes": {…},
+                      "pagination": {"limit":N, "offset":N, "total":N}},
+             "resources": [DetectsAlert, …],
+             "errors": []}
+
+        Each resource follows the ``DetectsAlert`` model — ``composite_id``
+        identity, 0-100 int ``severity`` with ``severity_name``, flat
+        ATT&CK fields plus ``mitre_attack[]``.
         """
         _check_token(request, token_getter("crowdstrike"))
         _stamp(response)
         picked = _pick("crowdstrike", scenarios)
+
+        total = len(picked)
+        lim = limit if limit and limit > 0 else max(total, 1)
+        off = offset if offset and offset > 0 else 0
+        window = picked[off:off + lim]
+
         return {
             "meta": {
                 "query_time": time.time(),
                 "powered_by": "siemulator",
                 "trace_id": f"cs-{int(time.time())}",
+                "writes": {"resources_affected": 0},
+                "pagination": {"limit": lim, "offset": off, "total": total},
             },
-            "resources": picked,
+            "resources": window,
             "errors": [],
         }
 

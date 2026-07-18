@@ -647,22 +647,83 @@ def _vendor_client():
     return TestClient(app)
 
 
-def test_crowdstrike_endpoint_returns_falcon_envelope():
-    """/crowdstrike/api/v1/detects returns Falcon shape (meta+resources+errors),
-    not QRadar offence shape."""
+def test_crowdstrike_endpoint_returns_alerts_v2_envelope():
+    """Both Falcon paths return the DetectsapiPostEntitiesAlertsV2Response
+    envelope — meta (with pagination + writes) / resources / errors."""
     c = _vendor_client()
-    r = c.get("/crowdstrike/api/v1/detects?scenarios=replay")
-    assert r.status_code == 200
-    body = r.json()
-    assert set(body.keys()) >= {"meta", "resources", "errors"}
-    assert isinstance(body["resources"], list)
-    assert body["resources"], "no CrowdStrike scenarios matched"
-    # Each resource should NOT carry QRadar-wrapper keys
-    r0 = body["resources"][0]
-    assert "offense_source" not in r0
-    assert "log_sources" not in r0
-    assert "source" in r0  # native raw_alert has a source field
-    assert "crowdstrike" in r0["source"].lower() or "falcon" in r0["source"].lower()
+    for path in ("/alerts/entities/alerts/v2", "/crowdstrike/api/v1/detects"):
+        r = c.get(f"{path}?scenarios=replay")
+        assert r.status_code == 200, path
+        body = r.json()
+        assert set(body.keys()) >= {"meta", "resources", "errors"}, path
+        meta = body["meta"]
+        for k in ("query_time", "powered_by", "trace_id", "pagination", "writes"):
+            assert k in meta, f"{path} meta missing {k!r}"
+        for k in ("limit", "offset", "total"):
+            assert k in meta["pagination"], f"{path} pagination missing {k!r}"
+        assert body["resources"], f"{path} returned no alerts"
+        r0 = body["resources"][0]
+        # No QRadar wrapper leakage
+        assert "offense_source" not in r0
+        assert "log_sources" not in r0
+
+
+def test_crowdstrike_alert_uses_detects_alert_field_names():
+    """Resources follow CrowdStrike's DetectsAlert model: composite_id
+    identity, int severity 0-100 alongside severity_name, flat ATT&CK
+    fields plus mitre_attack[], and Falcon's process/host/user names."""
+    c = _vendor_client()
+    a = c.get("/alerts/entities/alerts/v2?scenarios=replay").json()["resources"][0]
+
+    # Identity — composite_id is <cid>:ind:<agent_id>:<local>
+    assert isinstance(a["composite_id"], str)
+    parts = a["composite_id"].split(":")
+    assert len(parts) == 4 and parts[1] == "ind", a["composite_id"]
+    assert a["id"] == a["composite_id"]
+    assert len(a["agent_id"]) == 32
+    assert len(a["cid"]) == 32
+    assert a["aggregate_id"].startswith("aggind:")
+
+    # Scoring — severity is the 0-100 int, band mirrored in severity_name
+    assert isinstance(a["severity"], int) and 0 <= a["severity"] <= 100
+    assert a["severity_name"] in (
+        "Critical", "High", "Medium", "Low", "Informational"
+    )
+    assert isinstance(a["confidence"], int)
+
+    # Classification + triage
+    assert a["product"] == "epp"
+    assert a["type"] == "ldt"
+    assert isinstance(a["pattern_id"], int)
+    assert a["status"] == "new"
+    assert a["show_in_ui"] is True
+
+    # ATT&CK appears flat and structured
+    for k in ("tactic", "tactic_id", "technique", "technique_id", "objective"):
+        assert k in a, f"missing {k}"
+    assert isinstance(a["mitre_attack"], list)
+
+    # Falcon's own process / host / user field names
+    for k in ("filename", "filepath", "cmdline", "sha256", "md5",
+              "hostname", "local_ip", "platform", "user_name",
+              "logon_domain", "device_id", "falcon_host_link"):
+        assert k in a, f"missing Falcon field {k}"
+
+    # Provenance
+    assert a["source_vendors"] == ["CrowdStrike"]
+    assert a["source_products"] == ["Falcon Insight"]
+    assert a["data_domains"] == ["Endpoint"]
+
+
+def test_crowdstrike_paging_honours_limit_offset():
+    """limit / offset slice resources and are echoed in meta.pagination
+    with the unsliced total."""
+    c = _vendor_client()
+    body = c.get("/alerts/entities/alerts/v2?scenarios=replay&limit=2&offset=0").json()
+    assert len(body["resources"]) <= 2
+    assert body["meta"]["pagination"]["limit"] == 2
+    assert body["meta"]["pagination"]["offset"] == 0
+    assert body["meta"]["pagination"]["total"] >= len(body["resources"])
 
 
 def test_defender_endpoint_returns_graph_envelope():
@@ -744,7 +805,7 @@ def test_vendor_endpoints_scenarios_batch_rotates():
     c.post("/_debug/reset_vendor?vendor=crowdstrike")
     seen = set()
     for _ in range(20):
-        r = c.get("/crowdstrike/api/v1/detects?scenarios=batch")
+        r = c.get("/alerts/entities/alerts/v2?scenarios=batch")
         for res in r.json()["resources"]:
             seen.add(res.get("_offense_id"))
     assert len(seen) >= 2, "batch mode should rotate through CrowdStrike pool"
@@ -756,7 +817,7 @@ def test_vendor_endpoints_no_qradar_shape_leaks():
     on their alert payloads."""
     c = _vendor_client()
     for path, key in (
-        ("/crowdstrike/api/v1/detects?scenarios=replay", "resources"),
+        ("/alerts/entities/alerts/v2?scenarios=replay", "resources"),
         ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
         ("/rest/api/incidents?scenarios=replay", "items"),
     ):
@@ -781,7 +842,7 @@ def test_vendor_alerts_carry_portable_id_and_start_time():
     """
     c = _vendor_client()
     for path, key in (
-        ("/crowdstrike/api/v1/detects?scenarios=replay", "resources"),
+        ("/alerts/entities/alerts/v2?scenarios=replay", "resources"),
         ("/defender/api/security/v1.0/alerts?scenarios=replay", "value"),
         ("/rest/api/incidents?scenarios=replay", "items"),
     ):
@@ -803,8 +864,8 @@ def test_vendor_alerts_carry_vendor_canonical_id_fields():
     names, so a vendor-specific parser finds what it expects."""
     c = _vendor_client()
     cases = (
-        ("/crowdstrike/api/v1/detects?scenarios=replay", "resources",
-         "detection_id", "created_timestamp"),
+        ("/alerts/entities/alerts/v2?scenarios=replay", "resources",
+         "composite_id", "created_timestamp"),
         ("/defender/api/security/v1.0/alerts?scenarios=replay", "value",
          "id", "createdDateTime"),
         ("/rest/api/incidents?scenarios=replay", "items",
@@ -844,3 +905,4 @@ def test_vendor_prefixes_are_access_log_bound():
     assert '"/defender"' in src
     assert '"/netwitness"' in src
     assert '"/rest"' in src
+    assert '"/alerts"' in src

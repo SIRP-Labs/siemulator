@@ -695,7 +695,7 @@ _HTML_TEMPLATE = """<!doctype html>
         Synthetic SIEM data in real-vendor shapes — SIEM aggregators
         (<strong>Falcon LogScale</strong>, <strong>IBM QRadar</strong>,
         <strong>Splunk Enterprise</strong>) plus vendor-native EDR/XDR
-        envelopes (<strong>CrowdStrike Falcon</strong>,
+        envelopes (<strong>Falcon Alerts v2</strong>,
         <strong>Microsoft Defender</strong>, <strong>NetWitness Respond</strong>).
         Chaos-engineering and regression-testing primitives baked in.
         <strong>{scenario_count} multi-source attack scenarios</strong>,
@@ -1099,7 +1099,8 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}/results</span></li>
     <li>&nbsp;</li>
-    <li><span class="method get">GET</span><span class="path">/crowdstrike/api/v1/detects</span><span class="note">Falcon Streaming envelope (?scenarios=all|batch|replay)</span></li>
+    <li><span class="method get">GET</span><span class="path">/alerts/entities/alerts/v2</span><span class="note">Falcon Alerts v2 envelope (?limit=N&amp;offset=N)</span></li>
+    <li><span class="method get">GET</span><span class="path">/crowdstrike/api/v1/detects</span><span class="note">alias for /alerts/entities/alerts/v2</span></li>
     <li><span class="method get">GET</span><span class="path">/defender/api/security/v1.0/alerts</span><span class="note">Microsoft Graph Security envelope</span></li>
     <li><span class="method get">GET</span><span class="path">/rest/api/incidents</span><span class="note">NetWitness Respond envelope (?pageSize=N&amp;pageNumber=N)</span></li>
     <li><span class="method get">GET</span><span class="path">/netwitness/api/v1/incidents</span><span class="note">alias for /rest/api/incidents</span></li>

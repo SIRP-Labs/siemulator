@@ -61,7 +61,7 @@ schedule.
 |---|---|---|
 | QRadar offence ingestion (most SOARs) | `/qradar/*` | Native shape; consumers don't need custom mapping. 57 multi-source scenarios available with stable IDs for dedup. |
 | Humio / Falcon LogScale push integrations | `/logscale/*` | Mirrors Humio REST exactly — `@timestamp`, `@id`, `@rawstring`, `#repo` envelope. |
-| CrowdStrike Falcon vendor pack | `/crowdstrike/*` | Falcon Streaming API envelope (`{meta, resources[]}`) — filters the pool down to `source: CrowdStrike Falcon` scenarios so the Falcon parser sees its own shape. |
+| CrowdStrike Falcon vendor pack | `/alerts/entities/alerts/v2` | Falcon Alerts v2 envelope (`{meta{pagination,writes}, resources[], errors[]}`) with `DetectsAlert` field names — `composite_id` identity, 0-100 int `severity` + `severity_name`, flat ATT&CK fields plus `mitre_attack[]`, Falcon's `filename`/`cmdline`/`sha256`/`hostname`/`user_name`. `/crowdstrike/api/v1/detects` is kept as an alias. |
 | Microsoft Defender vendor pack | `/defender/*` | Microsoft Graph Security envelope (`{@odata.context, value[]}`) — scenarios with `source: Microsoft Defender…`. |
 | RSA NetWitness vendor pack | `/rest/api/incidents` | NetWitness Respond envelope (`{items[], pageNumber, pageSize, totalPages, totalItems, hasNext, hasPrevious}`) with Respond incident field names — `INC-<n>` id, `title`/`detail`, `riskScore`+`priority`, entities under `events[]`. `/netwitness/api/v1/incidents` is kept as an alias. |
 | Detection content (templates) — alert-shape testing | LogScale / QRadar | Both aggregator surfaces draw from the same 6-template pool; pick the shape your downstream consumer expects. |

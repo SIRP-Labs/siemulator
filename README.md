@@ -12,7 +12,7 @@ EDR/XDR endpoints:
 | ---------------------------------------- | ------------------------------------------------- | --------------------------------------- |
 | `/logscale/*`                            | Falcon LogScale (Humio REST API)                  | `Authorization: Bearer` or `?token=`    |
 | `/qradar/*`                              | IBM QRadar (offences + Ariel)                     | `SEC` header, `Bearer`, or `?token=`    |
-| `/crowdstrike/api/v1/detects`            | Falcon Streaming API (`{meta, resources[]}`)      | `Authorization: Bearer` or `?token=`    |
+| `/alerts/entities/alerts/v2`             | Falcon Alerts v2 (`{meta, resources[], errors[]}`) | `Authorization: Bearer` or `?token=`    |
 | `/defender/api/security/v1.0/alerts`     | Microsoft Graph Security (`{@odata.context, value[]}`) | `Authorization: Bearer` or `?token=`    |
 | `/rest/api/incidents`                    | NetWitness Respond (`{items[], totalItems, …}`)   | `Authorization: Bearer` or `?token=`    |
 
@@ -126,7 +126,7 @@ curl -H "SEC: qradar-dev-token" \
 curl "http://localhost:8080/qradar/api/siem/scenarios?token=qradar-dev-token"
 
 # Vendor-native shapes — same scenario pool, filtered by vendor
-curl "http://localhost:8080/crowdstrike/api/v1/detects?scenarios=replay"        # Falcon envelope
+curl "http://localhost:8080/alerts/entities/alerts/v2?scenarios=replay"          # Falcon Alerts v2 envelope
 curl "http://localhost:8080/defender/api/security/v1.0/alerts?scenarios=replay" # Graph Security envelope
 curl "http://localhost:8080/rest/api/incidents?scenarios=replay"                # NetWitness Respond envelope
 ```
@@ -224,7 +224,8 @@ its own shape.
 
 | Method | Path                                                    | Auth | Envelope                                              |
 | ------ | ------------------------------------------------------- | ---- | ----------------------------------------------------- |
-| GET    | `/crowdstrike/api/v1/detects[?scenarios=…]`             | ✅   | Falcon Streaming API: `{meta, resources[], errors}`   |
+| GET/POST | `/alerts/entities/alerts/v2[?scenarios=…&limit=N&offset=N]` | ✅ | Falcon Alerts v2: `{meta{pagination,writes}, resources[], errors[]}` — resources follow the `DetectsAlert` model |
+| GET    | `/crowdstrike/api/v1/detects`                           | ✅   | Alias for the above (kept for existing configs)      |
 | GET    | `/defender/api/security/v1.0/alerts[?scenarios=…]`      | ✅   | Microsoft Graph Security: `{@odata.context, value[]}` |
 | GET    | `/rest/api/incidents[?scenarios=…&pageSize=N&pageNumber=N]` | ✅   | NetWitness Respond: `{items[], pageNumber, pageSize, totalPages, totalItems, hasNext, hasPrevious}` |
 | GET    | `/netwitness/api/v1/incidents`                          | ✅   | Alias for the above (kept for existing configs)       |
