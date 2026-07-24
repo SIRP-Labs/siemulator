@@ -7,12 +7,12 @@ def test_scenarios_module_loads():
     from siemulator import scenarios
 
     out = scenarios.all_scenarios_as_qradar()
-    assert len(out) == 57, (
+    assert len(out) == 62, (
         "expected exactly 38 scenario alerts (12 S1-S5 + 10 v2 TEST A-J + 8 v3 DEMO A-H + 3 v4 SCAN A-C + 5 v5 ENRICH A-E)"
     )
     ids = [s["id"] for s in out]
     assert all(90_000 < i < 90_200 for i in ids)
-    assert len(set(ids)) == 57, "scenario IDs must be unique"
+    assert len(set(ids)) == 62, "scenario IDs must be unique"
 
 
 def test_scenarios_have_qradar_shape():
@@ -34,19 +34,19 @@ def test_scenarios_endpoint_direct(qradar_client):
     r = c.get("/qradar/api/siem/scenarios?token=stok")
     assert r.status_code == 200
     items = r.json()
-    assert len(items) == 57
+    assert len(items) == 62
     s1_ids = sorted(s["id"] for s in items if s.get("_scenario_id") == "S1")
     assert s1_ids == [90011, 90012, 90013, 90014, 90015]
 
 
 def test_scenarios_via_query_param(qradar_client):
-    """``?scenarios=all`` returns all 57 curated + 500 random noise by default."""
+    """``?scenarios=all`` returns all 62 curated + 500 random noise by default."""
     c = qradar_client(token="stok")
     from siemulator.qradar import _SCENARIOS_SERVED
     _SCENARIOS_SERVED.clear()
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=0")
     assert r.status_code == 200
-    assert len(r.json()) == 57
+    assert len(r.json()) == 62
 
 
 def test_scenarios_mix_mode(qradar_client):
@@ -57,7 +57,7 @@ def test_scenarios_mix_mode(qradar_client):
         headers={"Range": "items=0-2"},
     )
     items = r.json()
-    assert len(items) >= 60  # 57 scenarios + 3 templates
+    assert len(items) >= 65  # 62 scenarios + 3 templates
 
 
 def test_scenarios_preserve_multi_source_narratives():
@@ -571,7 +571,7 @@ def test_v6_literal_field_values_preserved():
 def test_scenarios_all_with_extras_appends_random(qradar_client):
     from siemulator.qradar import _SCENARIOS_SERVED
     _SCENARIOS_SERVED.clear()
-    """``?scenarios=all&extras=20`` returns the 57 curated + 20 random
+    """``?scenarios=all&extras=20`` returns the 62 curated + 20 random
     synthetic offences in a single poll. Randomised offences are drawn
     from ALERT_TEMPLATES with per-call random host / user / IP /
     offence_id — they're noise to fill the pool, not test fixtures."""
@@ -579,11 +579,11 @@ def test_scenarios_all_with_extras_appends_random(qradar_client):
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=20")
     assert r.status_code == 200
     items = r.json()
-    assert len(items) == 57 + 20
+    assert len(items) == 62 + 20
     # Curated 52 come first, extras tail after
-    curated = [i for i in items if 90_010 < i["id"] < 90_120]
-    extras = [i for i in items if i["id"] > 30_000 and i["id"] < 30_000_000 and not (90_010 < i["id"] < 90_120)]
-    assert len(curated) == 57
+    curated = [i for i in items if 90_010 < i["id"] < 90_200]
+    extras = [i for i in items if i["id"] > 30_000 and i["id"] < 30_000_000 and not (90_010 < i["id"] < 90_200)]
+    assert len(curated) == 62
     assert len(extras) == 20
     # The extras carry x-mock-source but no _scenario_id (they're not curated scenarios)
     assert all(e.get("_scenario_id") is None for e in extras)
@@ -596,7 +596,7 @@ def test_scenarios_all_extras_cap(qradar_client):
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=1500")
     items = r.json()
-    assert len(items) == 57 + 1000
+    assert len(items) == 62 + 1000
 
 
 def test_scenarios_batch_with_extras(qradar_client):
@@ -616,7 +616,7 @@ def test_scenarios_all_default_returns_curated_only(qradar_client):
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all")
     items = r.json()
-    assert len(items) == 57
+    assert len(items) == 62
 
 
 def test_scenarios_all_extras_zero_returns_bare_curated(qradar_client):
@@ -627,7 +627,7 @@ def test_scenarios_all_extras_zero_returns_bare_curated(qradar_client):
     c = qradar_client(token="stok")
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=all&extras=0")
     items = r.json()
-    assert len(items) == 57
+    assert len(items) == 62
 
 
 # ── Vendor-native endpoints ───────────────────────────────────────
@@ -1037,3 +1037,98 @@ def test_defender_a_preserves_hand_authored_graph_body():
     assert a["vendorInformation"]["subProvider"] == "MDATP"
     assert any(u.get("onPremisesSecurityIdentifier") for u in a["userStates"])
     assert any(h.get("fqdn") == "DC01.corp.local" for h in a["hostStates"])
+
+
+# ── v8 REAL-* scenarios — real abuse.ch IOCs (proper enrichment) ──
+
+
+def test_real_scenarios_present():
+    """The 5 REAL-* scenarios exist at offence IDs 90120-90124, one per
+    vendor shape plus a benign baseline."""
+    from siemulator import scenarios
+
+    reals = [
+        s for s in scenarios.all_scenarios_as_qradar()
+        if s.get("_scenario_id", "").startswith("REAL-")
+    ]
+    assert len(reals) == 5
+    labels = sorted(s["_scenario_id"] for s in reals)
+    assert labels == ["REAL-CS-A", "REAL-DEF-A", "REAL-NW-A",
+                      "REAL-QR-A", "REAL-QR-B"]
+    ids = sorted(s["id"] for s in reals)
+    assert ids == [90120, 90121, 90122, 90123, 90124]
+
+
+def test_real_scenarios_use_only_snapshot_iocs():
+    """Every malicious IOC in a REAL-* or retrofitted RANSOM-* scenario
+    must be a value from the REAL_IOCS provenance snapshot — no fictional
+    placeholders sneaking back in. That's the whole point: enrichment
+    has to resolve them."""
+    from siemulator.scenarios import REAL_IOCS, all_scenarios_as_qradar
+
+    snapshot_values = {str(v) for v in REAL_IOCS.values()}
+    for s in all_scenarios_as_qradar():
+        sid = s.get("_scenario_id", "")
+        if not (sid.startswith("REAL-") or sid.startswith("RANSOM-")):
+            continue
+        for ioc in s["_raw_alert"].get("iocs", []):
+            pat = ioc.get("pattern", "")
+            if pat.startswith("ti_abusech_") or pat.startswith("ti_benign_"):
+                assert ioc["value"] in snapshot_values, (
+                    f"{sid} IOC {ioc['value']!r} tagged {pat} is not in "
+                    f"the REAL_IOCS snapshot"
+                )
+            # No fictional markers on a real-scenario IOC
+            assert "badactor.example" not in str(ioc.get("value", "")), (
+                f"{sid} still carries a fictional IOC: {ioc.get('value')}"
+            )
+
+
+def test_real_scenarios_declare_ti_sources_and_verdict():
+    """Each REAL-* scenario must declare expected_ti_sources and a
+    concrete expected_verdict, so a grader can confirm enrichment fired
+    and returned the right answer."""
+    from siemulator import scenarios
+
+    for s in scenarios.all_scenarios_as_qradar():
+        if not s.get("_scenario_id", "").startswith("REAL-"):
+            continue
+        raw = s["_raw_alert"]
+        assert raw.get("expected_ti_sources"), f"{s['_scenario_id']} no ti_sources"
+        assert raw.get("expected_verdict") in (
+            "MALICIOUS_CONFIRMED", "BENIGN", "SUSPICIOUS"
+        ), f"{s['_scenario_id']} bad expected_verdict"
+
+
+def test_real_benign_baseline_is_only_benign_real_scenario():
+    """REAL-QR-B is the benign baseline — the four other REAL-* are
+    MALICIOUS. Pins the malicious/benign split so the batch keeps
+    covering both ends of proper enrichment."""
+    from siemulator import scenarios
+
+    verdicts = {
+        s["_scenario_id"]: s["_raw_alert"]["expected_verdict"]
+        for s in scenarios.all_scenarios_as_qradar()
+        if s.get("_scenario_id", "").startswith("REAL-")
+    }
+    assert verdicts["REAL-QR-B"] == "BENIGN"
+    malicious = [k for k, v in verdicts.items() if v == "MALICIOUS_CONFIRMED"]
+    assert sorted(malicious) == ["REAL-CS-A", "REAL-DEF-A", "REAL-NW-A", "REAL-QR-A"]
+
+
+def test_ransom_retrofit_dropped_fictional_iocs():
+    """RANSOM-A/B/C were retrofitted to real IOCs — none may carry the
+    old fictional 39.39.125.108 / malicious-c2.badactor.example."""
+    from siemulator import scenarios
+
+    for s in scenarios.all_scenarios_as_qradar():
+        sid = s.get("_scenario_id", "")
+        if not sid.startswith("RANSOM-"):
+            continue
+        blob = str(s["_raw_alert"])
+        assert "39.39.125.108" not in blob, f"{sid} kept fictional IP"
+        assert "badactor.example" not in blob, f"{sid} kept fictional domain"
+        # A/B/C are the C2-bearing ransomware kill-chain; D is the
+        # locky-filename FP with network=null and no C2 by design.
+        if sid in ("RANSOM-A", "RANSOM-B", "RANSOM-C"):
+            assert "50.16.16.211" in blob, f"{sid} missing real QakBot C2"

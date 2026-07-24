@@ -1093,7 +1093,7 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
     <li><span class="method get">GET</span><span class="path">{qr}/api/help</span><span class="note">health (no auth)</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/offenses</span><span class="note">?scenarios=all|batch|replay|mix</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/offenses/{{id}}</span></li>
-    <li><span class="method get">GET</span><span class="path">{qr}/api/siem/scenarios</span><span class="note">all 57 narratives</span></li>
+    <li><span class="method get">GET</span><span class="path">{qr}/api/siem/scenarios</span><span class="note">all 62 narratives</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/siem/source_addresses</span></li>
     <li><span class="method post">POST</span><span class="path">{qr}/api/ariel/searches</span></li>
     <li><span class="method get">GET</span><span class="path">{qr}/api/ariel/searches/{{id}}</span></li>

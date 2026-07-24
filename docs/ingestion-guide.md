@@ -59,19 +59,19 @@ schedule.
 
 | You want to test | Use surface | Why |
 |---|---|---|
-| QRadar offence ingestion (most SOARs) | `/qradar/*` | Native shape; consumers don't need custom mapping. 57 multi-source scenarios available with stable IDs for dedup. |
+| QRadar offence ingestion (most SOARs) | `/qradar/*` | Native shape; consumers don't need custom mapping. 62 multi-source scenarios available with stable IDs for dedup. |
 | Humio / Falcon LogScale push integrations | `/logscale/*` | Mirrors Humio REST exactly — `@timestamp`, `@id`, `@rawstring`, `#repo` envelope. |
 | CrowdStrike Falcon vendor pack | `/alerts/entities/alerts/v2` | Falcon Alerts v2 envelope (`{meta{pagination,writes}, resources[], errors[]}`) with `DetectsAlert` field names — `composite_id` identity, 0-100 int `severity` + `severity_name`, flat ATT&CK fields plus `mitre_attack[]`, Falcon's `filename`/`cmdline`/`sha256`/`hostname`/`user_name`. `/crowdstrike/api/v1/detects` is kept as an alias. |
 | Microsoft Defender vendor pack | `/v1.0/security/alerts` | Graph Security v1.0 envelope (`{@odata.context, @odata.count, value[]}`) with the `Alert` entity's camelCase fields — `vendorInformation.provider`, Graph's `severity`/`status` enums, and the nested `userStates[]` / `hostStates[]` / `networkConnections[]` / `processes[]` / `fileStates[]` collections. `/defender/api/security/v1.0/alerts` is kept as an alias. |
 | RSA NetWitness vendor pack | `/rest/api/incidents` | NetWitness Respond envelope (`{items[], pageNumber, pageSize, totalPages, totalItems, hasNext, hasPrevious}`) with Respond incident field names — `INC-<n>` id, `title`/`detail`, `riskScore`+`priority`, entities under `events[]`. `/netwitness/api/v1/incidents` is kept as an alias. |
 | Detection content (templates) — alert-shape testing | LogScale / QRadar | Both aggregator surfaces draw from the same 6-template pool; pick the shape your downstream consumer expects. |
-| Multi-source attack-narrative testing (5-alert chains across multiple vendors) | `/qradar/*` with `?scenarios=…` | The QRadar surface exposes the whole 57 scenario library in one envelope, so cross-vendor correlation logic can be exercised end-to-end. |
+| Multi-source attack-narrative testing (5-alert chains across multiple vendors) | `/qradar/*` with `?scenarios=…` | The QRadar surface exposes the whole 62 scenario library in one envelope, so cross-vendor correlation logic can be exercised end-to-end. |
 | Search-API testing (`/queryjobs`, Ariel) | LogScale / QRadar | LogScale `queryjobs` POST→poll matches Humio; QRadar Ariel matches the IBM async-search shape. |
 | Range-paginated ingestion (`Range: items=N-M`) | `/qradar/*` | QRadar canonical pagination header. LogScale uses `?limit=N` query param instead. |
 
 Most SOAR integrations want `/qradar/*` because (a) QRadar's
 offence shape is what most SOAR-vendor connectors are already built
-against, and (b) the 57 multi-source scenarios let you test correlation
+against, and (b) the 62 multi-source scenarios let you test correlation
 logic, not just shape parsing.
 
 **When to reach for the vendor-native endpoints:** if your SOAR has a
@@ -121,9 +121,9 @@ siemulator provides four modes via `?scenarios=…` on
 | Mode | Behaviour | When to use |
 |---|---|---|
 | _(default — no `?scenarios=`)_ | Returns N synthetic offences from the 6-template pool. Random IDs, random content per call. | Shape-only soak testing; load-style polling where you want a constant trickle. |
-| `?scenarios=all` | **One-shot dedup.** Returns scenarios with offence IDs your process hasn't served yet. Each ID emitted once per process lifetime. Subsequent polls return `[]` until reset. | **Default for SOAR ingestion testing.** A cron poll every 60s drains the 57 scenarios over ~57 polls, then quiesces. Your SOAR sees 57 distinct incidents, not the same one re-ingested 57 times. |
+| `?scenarios=all` | **One-shot dedup.** Returns scenarios with offence IDs your process hasn't served yet. Each ID emitted once per process lifetime. Subsequent polls return `[]` until reset. | **Default for SOAR ingestion testing.** A cron poll every 60s drains the 62 scenarios over ~62 polls, then quiesces. Your SOAR sees 62 distinct incidents, not the same one re-ingested 62 times. |
 | `?scenarios=batch` | Round-robin — one scenario per call, rotating through the pool. | Slow-drip ingestion where you want a steady stream of fresh content. |
-| `?scenarios=replay` | All 57 scenarios in one response, every call. | Bulk-load tests; one-shot end-to-end runs. |
+| `?scenarios=replay` | All 62 scenarios in one response, every call. | Bulk-load tests; one-shot end-to-end runs. |
 | `?scenarios=mix` | All scenarios + N synthetic templates from `Range: items=0-N`. | Mixed-pool stress testing. |
 
 If you choose `?scenarios=all` and want to replay the pool (e.g. after

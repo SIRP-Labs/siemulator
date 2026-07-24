@@ -122,7 +122,7 @@ curl -H "Authorization: Bearer logscale-dev-token" \
 curl -H "SEC: qradar-dev-token" \
   "http://localhost:8080/qradar/api/siem/offenses"
 
-# All 57 multi-source attack scenarios
+# All 62 multi-source attack scenarios
 curl "http://localhost:8080/qradar/api/siem/scenarios?token=qradar-dev-token"
 
 # Vendor-native shapes — same scenario pool, filtered by vendor
@@ -208,7 +208,7 @@ liveness probes that should never see HTML.
 | GET    | `/api/help` / `/api/help/capabilities`                  | —    | Health                                 |
 | GET    | `/api/siem/offenses[?scenarios=all\|batch\|replay\|mix]`| ✅   | Active offences + scenario modes       |
 | GET    | `/api/siem/offenses/{id}`                               | ✅   | Single offence (id echoed back)        |
-| GET    | `/api/siem/scenarios`                                   | ✅   | All 57 multi-source attack narratives  |
+| GET    | `/api/siem/scenarios`                                   | ✅   | All 62 multi-source attack narratives  |
 | GET    | `/api/siem/source_addresses`                            | ✅   | IP context (3 synthetic rows)          |
 | POST   | `/api/ariel/searches`                                   | ✅   | Submit (returns COMPLETED immediately) |
 | GET    | `/api/ariel/searches/{id}`                              | ✅   | Status                                 |
@@ -341,7 +341,7 @@ crashes — they're in `tests/test_qradar.py`):
   `POST /qradar/_debug/reset_scenarios` (admin-key gated).
 - **`batch`** — Rotate one scenario per call (round-robin through all
   22). Useful for slow-drip ingestion testing.
-- **`replay`** — All 57 scenarios in one response, ignoring the one-shot
+- **`replay`** — All 62 scenarios in one response, ignoring the one-shot
   dedup set. Useful for one-shot ad-hoc bulk ingestion tests.
 - **`mix`** — All scenarios + N synthetic templates (N from the `Range:
   items=0-N` header). Useful for testing how your consumer handles a
@@ -498,10 +498,25 @@ is exercised, not just the malicious path.
 | `fictional`    | Synthetic — fabricated domain                           | DEMO scenarios          | Short-circuit               |
 | `placeholder_*`| Synthetic — placeholder file hashes                     | DEMO scenarios          | Short-circuit               |
 | `ti_*`         | **Real public-TI-attributable** — should round-trip    | ENRICH-A through ENRICH-E | Full enrichment             |
+| `ti_abusech_*` | **Live abuse.ch IOC** (Feodo / URLhaus / ThreatFox)    | REAL-* + RANSOM-A/B/C  | Full enrichment → MALICIOUS |
+| `ti_benign_*`  | **Known-benign infra** (Google/Cloudflare DNS, MS Update) | REAL-QR-B             | Full enrichment → BENIGN    |
 | `tor_exit_*`   | Tor exit node                                           | DEMO-H, ENRICH-D       | Enrich (TorProject + GreyNoise) |
 | `authorized_pentest_*` | Authorized internal pentest actor               | SCAN-A through SCAN-C | Cross-reference with related_incidents |
 | `internal_corp_*` | Internal corp address ranges                        | SCAN scenarios        | Skip external TI (internal-only) |
 | `recon_tool`   | Known recon tool (nmap, masscan, ...)                   | SCAN scenarios        | Tool-attribution lookup    |
+
+**REAL-\* — real abuse.ch IOCs for proper enrichment.** Five scenarios
+(offence IDs 90120-90124), one per vendor shape plus a benign baseline,
+whose indicators are all live public threat-intel from abuse.ch (Feodo
+Tracker C2 IPs, URLhaus malware URLs, ThreatFox ClearFake domains +
+hashes). Unlike the deliberately-synthetic DEMO fixtures, these resolve
+to a genuine verdict when your enrichment pipeline queries public TI —
+so you can confirm enrichment actually fired instead of returning
+`unknown`. The snapshot + provenance lives in the `REAL_IOCS` block at
+the top of `scenarios.py`; the indicators are point-in-time (a C2 IP
+may go offline) so refresh the block when verdicts drift. RANSOM-A/B/C
+were retrofitted the same way (real QakBot C2 + ClearFake domain
+replacing the former placeholders).
 
 The full scenario corpus lives in `siemulator/scenarios.py` — JSON-defined
 payloads parsed once at import. Add your own by extending the registry

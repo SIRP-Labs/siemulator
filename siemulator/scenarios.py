@@ -30,6 +30,55 @@ from siemulator.config import MOCK_SOURCE  # noqa: F401  — re-exported for cal
 SCENARIO_ID_BASE = 90_000
 
 
+# ── Real threat-intel IOCs (abuse.ch snapshot) ──────────────────────
+#
+# Point-in-time snapshot of public abuse.ch feeds (CC0), taken so the
+# REAL-* scenarios and the retrofitted RANSOM-* scenarios carry
+# indicators that public TI actually resolves — the enrichment pipeline
+# returns a real verdict instead of "unknown".
+#
+# Provenance:
+#   c2_ips   — Feodo Tracker (feodotracker.abuse.ch) botnet C2 blocklist
+#   urls     — URLhaus (urlhaus.abuse.ch) malware-download URLs
+#   domains  — ThreatFox (threatfox.abuse.ch) payload-delivery domains
+#   hashes   — ThreatFox / MalwareBazaar sample SHA-256s
+#
+# These are LIVE indicators as of the snapshot date and rotate over
+# time — a C2 IP may go offline or be reassigned. They are snapshotted
+# (not fetched at runtime) so the fixture is deterministic; refresh the
+# block when the verdicts drift. Everything here is published by
+# abuse.ch specifically for defensive sharing (blocklists, IDS rules,
+# detection fixtures) — the same use as here.
+REAL_IOCS = {
+    "snapshot_date": "2026-07-24",
+    "source": "abuse.ch",
+    # Feodo Tracker — botnet command-and-control
+    "qakbot_c2_ip": "50.16.16.211",       # QakBot, :443, online at snapshot
+    "qakbot_c2_ip_2": "34.204.119.63",    # QakBot, :443
+    "emotet_c2_ip": "162.243.103.246",    # Emotet, :8080
+    # URLhaus — malware-download URL (Mozi botnet ELF dropper)
+    "mozi_url": "http://27.207.227.95:37522/bin.sh",
+    "mozi_host_ip": "27.207.227.95",      # malware-hosting IP for mozi_url
+    # ThreatFox — ClearFake payload-delivery, confidence 100
+    "clearfake_domain": "jbgpildun.net",
+    "clearfake_fqdn": "wpxahgsykirfvqojcp.jbgpildun.net",
+    "clearfake_sha256": (
+        "217aa6561129b2ca5958da9dde6223908ddbfc978b2b92946cda9e2e35998931"
+    ),
+    # Canonical historical / test indicators (permanently catalogued —
+    # do not rotate; reused across ENRICH-* and REAL-* scenarios)
+    "wannacry_sha256": (
+        "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
+    ),
+    "eicar_sha256": (
+        "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+    ),
+    "benign_dns_google": "8.8.8.8",
+    "benign_dns_cloudflare": "1.1.1.1",
+    "benign_microsoft_update": "windowsupdate.microsoft.com",
+}
+
+
 # ── Raw scenario payloads (parsed from the JSON strings) ─────────
 
 
@@ -1520,7 +1569,7 @@ _RANSOM_A = _j(r"""
     "expected_verdict": "MALICIOUS_CONFIRMED",
     "expected_category_id": 107,
     "expected_guardrails_that_should_fire": ["propose_destructive_actions_on_confirmed_ransomware", "require_analyst_approval_for_destructive"],
-    "expected_vendor_semantics": ["ransomware_behavior.encryption_signal", "ransomware_behavior.shadow_copy_deletion_signal", "ransomware_behavior.ransom_note_dropped_signal", "ransomware_behavior.c2_callback_signal"]
+    "expected_vendor_semantics": ["ransomware_behavior.encryption_signal", "ransomware_behavior.shadow_copy_deletion_signal", "ransomware_behavior.ransom_note_dropped_signal", "ransomware_behavior.c2_callback_signal", "enrichment.real_c2_ip_resolves_malicious", "enrichment.real_domain_resolves_malicious"]
   },
   "source": "CrowdStrike Falcon (via OmniStream)",
   "event_type": "RansomwareBehaviorDetection",
@@ -1531,7 +1580,7 @@ _RANSOM_A = _j(r"""
   "qradar_categories": ["Ransomware", "Malware Outbreak"],
   "alert": {
     "name": "Ransomware behavior — encryption + shadow-copy deletion + C2",
-    "description": "EDR observed the full ransomware kill-chain on SOLUTION-01: mass file encryption, shadow-copy deletion via vssadmin, ransom note dropped (READMEDEC.txt), C2 callback to an external IP. SHA-256 matches a known WannaCry-family sample. Consumer must trigger destructive-action approvals (contain host, block IP, block domain, block hash)."
+    "description": "EDR observed the full ransomware kill-chain on SOLUTION-01: mass file encryption, shadow-copy deletion via vssadmin, ransom note dropped (READMEDEC.txt), C2 callback to a real QakBot C2 IP (abuse.ch Feodo Tracker). SHA-256 matches a known WannaCry-family sample. Consumer must trigger destructive-action approvals (contain host, block IP, block domain, block hash)."
   },
   "raw_log": {
     "format": "JSON",
@@ -1547,9 +1596,9 @@ _RANSOM_A = _j(r"""
         "parent_process": "explorer.exe"
       },
       "network": {
-        "remote_ip": "39.39.125.108",
+        "remote_ip": "50.16.16.211",
         "remote_port": 443,
-        "domain": "malicious-c2.badactor.example",
+        "domain": "jbgpildun.net",
         "connection_direction": "outbound"
       },
       "behaviors": {
@@ -1567,9 +1616,9 @@ _RANSOM_A = _j(r"""
     "process_cmdline": "svchost.exe -k netsvcs -p -s Schedule",
     "process_sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
     "parent_process": "explorer.exe",
-    "remote_ip": "39.39.125.108",
+    "remote_ip": "50.16.16.211",
     "remote_port": 443,
-    "c2_domain": "malicious-c2.badactor.example",
+    "c2_domain": "jbgpildun.net",
     "file_mass_encryption": true,
     "shadow_copy_deletion": true,
     "ransom_note_dropped": "READMEDEC.txt"
@@ -1578,10 +1627,10 @@ _RANSOM_A = _j(r"""
     {"type": "hash_sha256", "value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
      "pattern": "ti_known_wannacry",
      "note": "Real WannaCry-family SHA-256 — VirusTotal + AlienVault OTX + ThreatFox + MalwareBazaar all attribute. Same hash as ENRICH-A."},
-    {"type": "ip", "value": "39.39.125.108", "pattern": "external_c2_candidate",
-     "note": "External destination IP. Enrichment should attempt attribution; may or may not be pre-catalogued in public TI."},
-    {"type": "domain", "value": "malicious-c2.badactor.example", "pattern": "fictional_c2",
-     "note": "Fictional domain for the scenario — won't be catalogued by public TI, but the parsed shape (newly-observed + connecting to an external IP) is the behavioral anchor."}
+    {"type": "ip", "value": "50.16.16.211", "pattern": "ti_abusech_qakbot_c2",
+     "note": "Real QakBot C2 IP from abuse.ch Feodo Tracker (snapshot 2026-07-24, :443). Public TI (Feodo/AbuseIPDB/ThreatFox) resolves it MALICIOUS."},
+    {"type": "domain", "value": "jbgpildun.net", "pattern": "ti_abusech_clearfake_domain",
+     "note": "Real ClearFake payload-delivery domain from abuse.ch ThreatFox (confidence 100, snapshot 2026-07-24). Public TI resolves it MALICIOUS."}
   ],
   "expected_iti_category_id": 107,
   "expected_iti_category_name": "Ransomware",
@@ -1591,9 +1640,9 @@ _RANSOM_A = _j(r"""
     {"am_name": "process", "am_value": "svchost.exe"},
     {"am_name": "process_cmdline", "am_value": "svchost.exe -k netsvcs -p -s Schedule"},
     {"am_name": "file_hash_sha256", "am_value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"},
-    {"am_name": "destination_ip", "am_value": "39.39.125.108"},
+    {"am_name": "destination_ip", "am_value": "50.16.16.211"},
     {"am_name": "destination_port", "am_value": "443"},
-    {"am_name": "domain", "am_value": "malicious-c2.badactor.example"}
+    {"am_name": "domain", "am_value": "jbgpildun.net"}
   ],
   "expected_verdict": "MALICIOUS_CONFIRMED",
   "expected_disposition": "true_positive_confirmed_ransomware",
@@ -1604,6 +1653,7 @@ _RANSOM_A = _j(r"""
     "block_domain",
     "block_hash"
   ],
+  "expected_ti_sources": ["VirusTotal", "AlienVault OTX", "ThreatFox", "MalwareBazaar", "Feodo Tracker", "AbuseIPDB"],
   "test_notes": "Baseline ransomware payload with all three behavioral prerequisites for the Ransomware category: file_mass_encryption + shadow_copy_deletion + ransom_note_dropped. Downstream Planner should propose 4 destructive actions (contain / block IP / block domain / block hash). Category MUST be Ransomware (107) — a category-107 verdict on a payload without encryption behaviors would be a false floor; a non-107 verdict here means the guardrail is too aggressive."
 }
 """)
@@ -1640,8 +1690,8 @@ _RANSOM_B = _j(r"""
         "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
       },
       "network": {
-        "remote_ip": "39.39.125.108",
-        "domain": "malicious-c2.badactor.example"
+        "remote_ip": "50.16.16.211",
+        "domain": "jbgpildun.net"
       },
       "behaviors": {
         "file_mass_encryption": true,
@@ -1660,8 +1710,8 @@ _RANSOM_B = _j(r"""
   },
   "iocs": [
     {"type": "hash_sha256", "value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa", "pattern": "ti_known_wannacry"},
-    {"type": "ip", "value": "39.39.125.108", "pattern": "external_c2_candidate"},
-    {"type": "domain", "value": "malicious-c2.badactor.example", "pattern": "fictional_c2"}
+    {"type": "ip", "value": "50.16.16.211", "pattern": "ti_abusech_qakbot_c2"},
+    {"type": "domain", "value": "jbgpildun.net", "pattern": "ti_abusech_clearfake_domain"}
   ],
   "expected_iti_category_id": 107,
   "expected_iti_category_name": "Ransomware",
@@ -1705,8 +1755,8 @@ _RANSOM_C = _j(r"""
         "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
       },
       "network": {
-        "remote_ip": "39.39.125.108",
-        "domain": "malicious-c2.badactor.example"
+        "remote_ip": "50.16.16.211",
+        "domain": "jbgpildun.net"
       },
       "behaviors": {
         "file_mass_encryption": true,
@@ -1726,8 +1776,8 @@ _RANSOM_C = _j(r"""
   },
   "iocs": [
     {"type": "hash_sha256", "value": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa", "pattern": "ti_known_wannacry"},
-    {"type": "ip", "value": "39.39.125.108", "pattern": "external_c2_candidate"},
-    {"type": "domain", "value": "malicious-c2.badactor.example", "pattern": "fictional_c2"}
+    {"type": "ip", "value": "50.16.16.211", "pattern": "ti_abusech_qakbot_c2"},
+    {"type": "domain", "value": "jbgpildun.net", "pattern": "ti_abusech_clearfake_domain"}
   ],
   "expected_iti_category_id": 107,
   "expected_iti_category_name": "Ransomware",
@@ -2227,7 +2277,7 @@ _DEFENDER_A = _j(r"""
       ],
       "networkConnections": [
         {"destinationAddress": "185.220.101.34", "destinationPort": "443", "destinationUrl": "https://185.220.101.34/beacon", "protocol": "tcp"},
-        {"destinationAddress": "45.146.130.15",  "destinationPort": "8080", "destinationUrl": "http://malicious-c2.badactor.example/gate.php", "protocol": "tcp"}
+        {"destinationAddress": "162.243.103.246",  "destinationPort": "8080", "destinationUrl": "http://27.207.227.95:37522/bin.sh", "protocol": "tcp"}
       ],
       "processes": [
         {"name": "rundll32.exe", "path": "C:\\Windows\\System32\\rundll32.exe", "commandLine": "rundll32.exe C:\\Users\\Public\\evil.dll,Start", "md5": "5d41402abc4b2a76b9719d911017c592", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "parentProcessName": "explorer.exe"},
@@ -2244,8 +2294,8 @@ _DEFENDER_A = _j(r"""
     "user_principal_names": ["alice.smith@corp.local", "svc_backup@corp.local"],
     "host_fqdns": ["DC01.corp.local", "WKS-ADMIN-02.corp.local"],
     "host_ips": ["10.20.30.5", "10.20.30.42"],
-    "connection_destination_ips": ["185.220.101.34", "45.146.130.15"],
-    "connection_destination_urls": ["https://185.220.101.34/beacon", "http://malicious-c2.badactor.example/gate.php"],
+    "connection_destination_ips": ["185.220.101.34", "162.243.103.246"],
+    "connection_destination_urls": ["https://185.220.101.34/beacon", "http://27.207.227.95:37522/bin.sh"],
     "process_hashes_md5": ["5d41402abc4b2a76b9719d911017c592", "9e107d9d372bb6826bd81d3542a419d6"],
     "process_hashes_sha256": ["e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "6b5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f"],
     "file_names": ["evil.dll", "stager.ps1"],
@@ -2253,8 +2303,8 @@ _DEFENDER_A = _j(r"""
   },
   "iocs": [
     {"type": "ip",          "value": "185.220.101.34", "pattern": "ti_tor_exit_real"},
-    {"type": "ip",          "value": "45.146.130.15",  "pattern": "external_c2_candidate"},
-    {"type": "url",         "value": "http://malicious-c2.badactor.example/gate.php", "pattern": "external_c2_candidate"},
+    {"type": "ip",          "value": "162.243.103.246",  "pattern": "ti_abusech_emotet_c2"},
+    {"type": "url",         "value": "http://27.207.227.95:37522/bin.sh", "pattern": "ti_abusech_mozi_url"},
     {"type": "hash_sha256", "value": "aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66", "pattern": "sideloaded_dll_hash"},
     {"type": "hash_sha256", "value": "bb22cc33dd44ee55ff66aa77bb88cc99dd00ee11ff22aa33bb44cc55dd66ee77", "pattern": "stager_hash"},
     {"type": "user",        "value": "alice.smith@corp.local", "pattern": "affected_user"},
@@ -2530,6 +2580,256 @@ _NETWITNESS_A = _j(r"""
 """)
 
 
+# ── v8 REAL-* payloads (2026-07-24) — real abuse.ch IOCs ────────────
+# Every IOC here is a live public threat-intel indicator (see REAL_IOCS
+# provenance block), so the enrichment pipeline returns a genuine
+# verdict instead of "unknown". Spread across the vendor-native shapes
+# so each vendor endpoint serves at least one properly-enriching alert.
+
+_REAL_CS_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "R1_falcon_qakbot_c2_real_ioc",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 109,
+    "expected_guardrails_that_should_fire": ["enrich_before_verdict"],
+    "expected_vendor_semantics": ["enrichment.real_c2_ip_resolves_malicious", "enrichment.feodo_tracker_attribution"]
+  },
+  "source": "CrowdStrike Falcon",
+  "event_type": "DetectionSummaryEvent",
+  "timestamp": "2026-07-24T09:10:00Z",
+  "severity": "High",
+  "confidence": 88,
+  "category": "109 Command and Control",
+  "qradar_categories": ["Command and Control", "Malware"],
+  "detection": {
+    "name": "QakBot C2 beacon — outbound to known botnet controller",
+    "description": "wermgr.exe (injected) beaconing to a QakBot command-and-control IP catalogued by abuse.ch Feodo Tracker. Real IOC: enrichment resolves the destination MALICIOUS with malware-family attribution.",
+    "technique": "T1071.001",
+    "tactic": "Command and Control"
+  },
+  "host": {"hostname": "FIN-WKS-114", "ip": "10.40.12.114", "s3_score": 78},
+  "user": {"username": "ACME\\j.okafor", "department": "Finance"},
+  "process": {
+    "name": "wermgr.exe",
+    "sha256": "217aa6561129b2ca5958da9dde6223908ddbfc978b2b92946cda9e2e35998931",
+    "command_line": "C:\\Windows\\System32\\wermgr.exe",
+    "parent": "explorer.exe"
+  },
+  "network": {"remote_ip": "50.16.16.211", "remote_port": 443, "connection_direction": "outbound"},
+  "iocs": [
+    {"type": "ip", "value": "50.16.16.211", "pattern": "ti_abusech_qakbot_c2",
+     "note": "Real QakBot C2 IP — abuse.ch Feodo Tracker (snapshot 2026-07-24, :443, online). Feodo/AbuseIPDB/ThreatFox resolve MALICIOUS."},
+    {"type": "hash_sha256", "value": "217aa6561129b2ca5958da9dde6223908ddbfc978b2b92946cda9e2e35998931", "pattern": "ti_abusech_clearfake_payload",
+     "note": "Real ClearFake payload SHA-256 — abuse.ch ThreatFox (confidence 100)."}
+  ],
+  "expected_iti_category_id": 109,
+  "expected_iti_category_name": "Command and Control",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_c2",
+  "expected_severity": "SEV1",
+  "expected_ti_sources": ["Feodo Tracker", "AbuseIPDB", "ThreatFox", "VirusTotal"],
+  "test_notes": "Real-IOC enrichment positive path (Falcon). Destination 50.16.16.211 is a live QakBot C2 from abuse.ch Feodo Tracker — enrichment MUST return MALICIOUS with QakBot attribution, not 'unknown'. Process hash is a real ClearFake payload sample. If enrichment returns benign/unknown for either, the enrichment source wiring is broken."
+}
+""")
+
+_REAL_DEF_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "R2_defender_clearfake_payload_real_ioc",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 107,
+    "expected_guardrails_that_should_fire": ["enrich_before_verdict"],
+    "expected_vendor_semantics": ["enrichment.real_domain_resolves_malicious", "enrichment.real_hash_resolves_malicious"]
+  },
+  "source": "Microsoft Defender for Endpoint",
+  "event_type": "Graph-Security-Alert",
+  "timestamp": "2026-07-24T09:20:00Z",
+  "severity": "High",
+  "confidence": 90,
+  "category": "107 Malware",
+  "qradar_categories": ["Malware", "Payload Delivery"],
+  "alert": {
+    "name": "Defender ATP — ClearFake payload downloaded from known malicious domain",
+    "description": "Browser fetched a ClearFake payload from a domain catalogued by abuse.ch ThreatFox, then wrote the sample to disk. Both the domain and the file hash are real IOCs: enrichment resolves both MALICIOUS with ClearFake attribution."
+  },
+  "parsed": {
+    "device_hostname": "MKT-WKS-207",
+    "user": "ACME\\a.nowak",
+    "process_name": "msedge.exe",
+    "process_sha256": "217aa6561129b2ca5958da9dde6223908ddbfc978b2b92946cda9e2e35998931",
+    "src": "10.44.9.207",
+    "dst": "jbgpildun.net",
+    "misc_queried_domain": "wpxahgsykirfvqojcp.jbgpildun.net"
+  },
+  "iocs": [
+    {"type": "domain", "value": "jbgpildun.net", "pattern": "ti_abusech_clearfake_domain",
+     "note": "Real ClearFake payload-delivery domain — abuse.ch ThreatFox (confidence 100, snapshot 2026-07-24)."},
+    {"type": "domain", "value": "wpxahgsykirfvqojcp.jbgpildun.net", "pattern": "ti_abusech_clearfake_domain",
+     "note": "ClearFake payload FQDN — same campaign, abuse.ch ThreatFox."},
+    {"type": "hash_sha256", "value": "217aa6561129b2ca5958da9dde6223908ddbfc978b2b92946cda9e2e35998931", "pattern": "ti_abusech_clearfake_payload",
+     "note": "Real ClearFake payload SHA-256 — abuse.ch ThreatFox / MalwareBazaar."}
+  ],
+  "expected_iti_category_id": 107,
+  "expected_iti_category_name": "Malware",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_malware",
+  "expected_severity": "SEV1",
+  "expected_ti_sources": ["ThreatFox", "VirusTotal", "MalwareBazaar", "URLhaus"],
+  "test_notes": "Real-IOC enrichment positive path (Defender). Domain jbgpildun.net + hash 217aa6…8931 are both live abuse.ch ClearFake IOCs. Enrichment MUST resolve both MALICIOUS with ClearFake family attribution. Serves through /v1.0/security/alerts."
+}
+""")
+
+_REAL_NW_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "R3_netwitness_mozi_download_real_ioc",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 107,
+    "expected_guardrails_that_should_fire": ["enrich_before_verdict"],
+    "expected_vendor_semantics": ["enrichment.real_url_resolves_malicious", "enrichment.urlhaus_attribution"]
+  },
+  "source": "NetWitness",
+  "event_type": "NetWitness-Alert",
+  "timestamp": "2026-07-24T09:30:00Z",
+  "severity": "High",
+  "confidence": 80,
+  "category": "107 Malware",
+  "qradar_categories": ["Malware", "IDS/IPS"],
+  "alert": {
+    "name": "NetWitness — IoT host fetched Mozi ELF dropper from known malware URL",
+    "description": "Internal host retrieved an ELF payload from a URLhaus-catalogued Mozi botnet download URL. Real IOC: enrichment resolves the URL MALICIOUS (malware_download) with Mozi attribution."
+  },
+  "raw_log": {
+    "format": "NetWitness-Syslog",
+    "syslog_wrapper": "<134>1 2026-07-24T09:30:00Z nw-concentrator-01 nw - - -",
+    "body": "cat=Malware cs1=mozi-elf-download esrc=10.60.22.9 edst=27.207.227.95 esrc_hostname=IOT-CAM-09 dpt=37522 proto=tcp url=http://27.207.227.95:37522/bin.sh sessionid=5566778899 alert.id=NW-ALERT-2026-07-24-0007 alert.name=MoziBotnetDownload rule=nw-rule-88 confidence=80 severity=high act=allow event.time=2026-07-24T09:30:00Z"
+  },
+  "parsed": {
+    "cat": "Malware",
+    "esrc": "10.60.22.9",
+    "edst": "27.207.227.95",
+    "esrc_hostname": "IOT-CAM-09",
+    "dpt": 37522,
+    "proto": "tcp",
+    "url": "http://27.207.227.95:37522/bin.sh",
+    "sessionid": "5566778899",
+    "alert_id": "NW-ALERT-2026-07-24-0007",
+    "alert_name": "MoziBotnetDownload"
+  },
+  "iocs": [
+    {"type": "url", "value": "http://27.207.227.95:37522/bin.sh", "pattern": "ti_abusech_mozi_url",
+     "note": "Real Mozi botnet ELF-dropper URL — abuse.ch URLhaus (malware_download, snapshot 2026-07-24). URLhaus/VirusTotal resolve MALICIOUS."},
+    {"type": "ip", "value": "27.207.227.95", "pattern": "ti_abusech_mozi_host",
+     "note": "Malware-hosting IP for the above URL (URLhaus)."}
+  ],
+  "expected_iti_category_id": 107,
+  "expected_iti_category_name": "Malware",
+  "expected_iti_attack_severity": "SEV2",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_malware",
+  "expected_severity": "SEV2",
+  "expected_ti_sources": ["URLhaus", "VirusTotal", "abuse.ch"],
+  "test_notes": "Real-IOC enrichment positive path (NetWitness). URL http://27.207.227.95:37522/bin.sh is a live URLhaus Mozi download — enrichment MUST resolve MALICIOUS. Serves through /rest/api/incidents. esrc has no :port suffix (keeps the pk.sirp.io regression clean)."
+}
+""")
+
+_REAL_QR_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "R4_qradar_emotet_c2_real_ioc",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 109,
+    "expected_guardrails_that_should_fire": ["enrich_before_verdict"],
+    "expected_vendor_semantics": ["enrichment.real_c2_ip_resolves_malicious", "enrichment.feodo_tracker_attribution"]
+  },
+  "source": "QRadar",
+  "event_type": "Offense",
+  "timestamp": "2026-07-24T09:40:00Z",
+  "severity": "High",
+  "confidence": 82,
+  "category": "109 Command and Control",
+  "qradar_categories": ["Command and Control", "Botnet"],
+  "alert": {
+    "name": "Outbound to Emotet C2 controller (Feodo Tracker)",
+    "description": "Workstation established repeated outbound sessions to an Emotet C2 IP catalogued by abuse.ch Feodo Tracker on port 8080. Real IOC: enrichment resolves MALICIOUS with Emotet attribution."
+  },
+  "parsed": {
+    "src": "10.20.7.51",
+    "dst": "162.243.103.246",
+    "dport": 8080,
+    "proto": "tcp",
+    "device_hostname": "HR-WKS-051",
+    "bytes_sent": 8420,
+    "bytes_received": 15330
+  },
+  "iocs": [
+    {"type": "ip", "value": "162.243.103.246", "pattern": "ti_abusech_emotet_c2",
+     "note": "Real Emotet C2 IP — abuse.ch Feodo Tracker (:8080, snapshot 2026-07-24). Feodo/AbuseIPDB resolve MALICIOUS."},
+    {"type": "ip", "value": "10.20.7.51", "pattern": "internal_corp_source"}
+  ],
+  "expected_iti_category_id": 109,
+  "expected_iti_category_name": "Command and Control",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_c2",
+  "expected_severity": "SEV1",
+  "expected_ti_sources": ["Feodo Tracker", "AbuseIPDB", "ThreatFox"],
+  "test_notes": "Real-IOC enrichment positive path (QRadar). Destination 162.243.103.246:8080 is a live Emotet C2 from abuse.ch Feodo Tracker — enrichment MUST return MALICIOUS with Emotet attribution."
+}
+""")
+
+_REAL_QR_B = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "R5_qradar_benign_infra_real_ioc",
+    "expected_verdict": "BENIGN",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["never_escalate_clean_enrichment"],
+    "expected_vendor_semantics": ["enrichment.benign_infra_resolves_clean"]
+  },
+  "source": "QRadar",
+  "event_type": "Offense",
+  "timestamp": "2026-07-24T09:50:00Z",
+  "severity": "Low",
+  "confidence": 40,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "Firewall Traffic"],
+  "alert": {
+    "name": "Periodic outbound to public DNS + Windows Update (benign baseline)",
+    "description": "Workstation reaching Google DNS, Cloudflare DNS, and Windows Update. Every destination is well-known benign infrastructure that public TI resolves clean. Baseline for the 'properly enriches benign' path — verdict must NOT escalate."
+  },
+  "parsed": {
+    "src": "10.20.7.99",
+    "device_hostname": "ENG-WKS-099",
+    "destinations": [
+      {"ip": "8.8.8.8", "port": 53, "proto": "udp"},
+      {"ip": "1.1.1.1", "port": 53, "proto": "udp"},
+      {"domain": "windowsupdate.microsoft.com", "port": 443, "proto": "tcp"}
+    ]
+  },
+  "iocs": [
+    {"type": "ip", "value": "8.8.8.8", "pattern": "ti_benign_google_dns",
+     "note": "Google Public DNS — every TI source resolves BENIGN."},
+    {"type": "ip", "value": "1.1.1.1", "pattern": "ti_benign_cloudflare_dns",
+     "note": "Cloudflare Public DNS — BENIGN."},
+    {"type": "domain", "value": "windowsupdate.microsoft.com", "pattern": "ti_benign_microsoft",
+     "note": "Microsoft Update infrastructure — BENIGN."}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV5",
+  "expected_verdict": "BENIGN",
+  "expected_disposition": "false_positive_benign_infra",
+  "expected_severity": "SEV5",
+  "expected_ti_sources": ["VirusTotal", "AbuseIPDB", "GreyNoise"],
+  "test_notes": "Real-IOC enrichment negative path (QRadar). All destinations are canonical benign infra (Google/Cloudflare DNS, Windows Update). Enrichment MUST resolve BENIGN and the verdict must NOT escalate. Complements the malicious REAL-* scenarios so the analyst sees both ends of proper enrichment."
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -2607,6 +2907,13 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 117, "NOTION-EXFIL", "112 Data Loss — Zscaler large Base64 POST to api.notion.com (ADR 0068 behavior_overrides_reputation)", _NOTION_EXFIL),
     (SCENARIO_ID_BASE + 118, "QR-VERSIP",    "111 EDR Alert — QRadar destination_ip=6.5.2.1 version-string (#1319 + #1693 double-drop)", _QR_VERSIP),
     (SCENARIO_ID_BASE + 119, "NETWITNESS-A", "110 Network Anomaly — NetWitness decoder smoke test (esrc no :port)", _NETWITNESS_A),
+    # v8 REAL payloads (2026-07-24) — real abuse.ch IOCs so enrichment
+    # returns a genuine verdict. Offence IDs 90120-90124.
+    (SCENARIO_ID_BASE + 120, "REAL-CS-A",  "109 C2 — Falcon QakBot C2 beacon (real abuse.ch Feodo IOC)", _REAL_CS_A),
+    (SCENARIO_ID_BASE + 121, "REAL-DEF-A", "107 Malware — Defender ClearFake payload (real abuse.ch ThreatFox IOC)", _REAL_DEF_A),
+    (SCENARIO_ID_BASE + 122, "REAL-NW-A",  "107 Malware — NetWitness Mozi ELF download (real abuse.ch URLhaus IOC)", _REAL_NW_A),
+    (SCENARIO_ID_BASE + 123, "REAL-QR-A",  "109 C2 — QRadar Emotet C2 callout (real abuse.ch Feodo IOC)", _REAL_QR_A),
+    (SCENARIO_ID_BASE + 124, "REAL-QR-B",  "110 Network Anomaly — QRadar benign infra baseline (real benign IOCs)", _REAL_QR_B),
 ]
 
 
