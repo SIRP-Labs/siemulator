@@ -52,6 +52,53 @@ def _vendor_of(source: str) -> str:
     return (source or "?").split()[0] if source else "?"
 
 
+def _self_category_name(raw: dict) -> str:
+    """The category name the scenario calls itself, from
+    expected_iti_category_name or the trailing text of the `category`
+    string."""
+    name = raw.get("expected_iti_category_name")
+    if name:
+        return str(name)
+    import re
+
+    m = re.match(r"^\d{3}\s+(.*)", str(raw.get("category", "")))
+    return m.group(1) if m else ""
+
+
+def category_conflicts() -> list[dict]:
+    """Scenarios whose category id maps to a DIFFERENT name under the
+    authoritative taxonomy than the name the scenario gives itself —
+    i.e. the corpus was labeled on an older/other numbering. Surfaced so
+    the taxonomy reconciliation is a tracked, visible decision rather
+    than a silent wrong answer key."""
+    from siemulator.labels import TAXONOMY
+    from siemulator.scenarios import SCENARIOS
+
+    out = []
+    for _oid, sid, _lbl, raw in SCENARIOS:
+        cid = raw.get("expected_iti_category_id") or (
+            raw.get("_test_meta") or {}
+        ).get("expected_category_id")
+        if not isinstance(cid, int):
+            import re
+
+            m = re.match(r"^(\d{3})\b", str(raw.get("category", "")))
+            cid = int(m.group(1)) if m else None
+        if cid is None:
+            continue
+        self_name = _self_category_name(raw)
+        auth = TAXONOMY.get(cid, "")
+        if not self_name or not auth:
+            continue
+        a, b = self_name.split()[0].lower(), auth.split()[0].lower()
+        if a not in auth.lower() and b not in self_name.lower():
+            out.append({
+                "scenario_id": sid, "category_id": cid,
+                "self_name": self_name, "authoritative_name": auth,
+            })
+    return out
+
+
 def coverage() -> dict:
     """Compute the full coverage report as structured data."""
     from siemulator.labels import all_labels
@@ -125,6 +172,7 @@ def coverage() -> dict:
             "synthetic": synthetic_lane,
             "neither": neither,
         },
+        "category_conflicts": category_conflicts(),
     }
 
 
@@ -166,6 +214,23 @@ def format_report(cov: dict | None = None) -> str:
         f"IOC lanes: real={lanes['real']}  synthetic={lanes['synthetic']}  "
         f"other={lanes['neither']}"
     )
+
+    conflicts = c.get("category_conflicts", [])
+    lines.append("")
+    if conflicts:
+        lines.append(
+            f"⚠ Taxonomy conflicts: {len(conflicts)} scenarios labeled on a "
+            f"DIFFERENT numbering than the authoritative taxonomy"
+        )
+        for cf in conflicts[:8]:
+            lines.append(
+                f"  {cf['scenario_id']:14s} id {cf['category_id']}: "
+                f"corpus={cf['self_name']!r} vs authoritative={cf['authoritative_name']!r}"
+            )
+        if len(conflicts) > 8:
+            lines.append(f"  … +{len(conflicts) - 8} more")
+    else:
+        lines.append("Taxonomy conflicts: none")
     return "\n".join(lines)
 
 

@@ -232,3 +232,33 @@ def test_unclassified_excluded_from_taxonomy_present_set():
     tx = coverage()["taxonomy"]
     assert all(isinstance(c, int) for c in tx["present"])
     assert tx["unclassified"] >= 1
+
+
+# ── authoritative taxonomy + reconciliation tracking ────────────────
+
+
+def test_authoritative_taxonomy_is_complete():
+    """The canonical 103-123 block (21 ids) + the 3 tail categories are
+    all defined with names."""
+    from siemulator.labels import TAXONOMY
+
+    for cid in range(103, 124):
+        assert cid in TAXONOMY and TAXONOMY[cid], f"taxonomy missing {cid}"
+    for cid in (126, 169, 172):
+        assert cid in TAXONOMY, f"taxonomy missing tail {cid}"
+
+
+def test_category_conflicts_are_tracked():
+    """The corpus is (still) labeled on an older numbering than the
+    authoritative taxonomy — this pin documents the count so the
+    reconciliation can't be silently forgotten, and so a *reduction*
+    is visible when it lands. It is a tracker, not a zero-assertion."""
+    from siemulator.scorecard import category_conflicts
+
+    conflicts = category_conflicts()
+    # Every conflict entry names both sides so a human can adjudicate.
+    for cf in conflicts:
+        assert {"scenario_id", "category_id", "self_name",
+                "authoritative_name"} <= set(cf)
+    # Known baseline at time of writing (reconciliation pending).
+    assert len(conflicts) >= 1

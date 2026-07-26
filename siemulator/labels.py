@@ -34,6 +34,43 @@ from __future__ import annotations
 
 import re
 
+# ── Authoritative 22-item category taxonomy ─────────────────────────
+# id -> canonical name, supplied 2026-07-26. This is the map a grader
+# scores category_id against (brief §4a). NOTE: the existing corpus was
+# authored against an OLDER numbering (107=Ransomware, 109=C2,
+# 110=Network Anomaly, 111=Endpoint Defense Evasion, 112=Data Loss,
+# 114=Cloud Security, 118=Privileged Access, 119=Process Execution) that
+# conflicts with this one — see scorecard `category_conflicts`. The
+# reconciliation is a pending decision, NOT applied blind, because a
+# wrong answer key silently fails every grade.
+TAXONOMY = {
+    103: "Ransomware",
+    104: "APT / Threat Actor Activity",
+    105: "Privilege Escalation",
+    106: "Lateral Movement",
+    107: "Malware",
+    108: "Account Compromise",
+    109: "Data Exfiltration",
+    110: "Intrusion",
+    111: "Cloud Security",
+    112: "Insider Threat",
+    113: "Web Application Attack",
+    114: "Network Anomaly",
+    115: "Vulnerability Exposure",
+    116: "Policy Violation",
+    117: "Reconnaissance",
+    118: "Exposure",
+    119: "Benign / Informational",
+    120: "False Positive",
+    121: "Credential Access",
+    122: "Intrusion Attempt",
+    123: "Phishing / Social Engineering",
+    # tail (appliance-specific, brief §4a)
+    126: "Server Attack",
+    169: "BEC",
+    172: "Cloud Compromise",
+}
+
 _LEADING_CAT = re.compile(r"^\s*(\d{3})\b")
 
 # expected_verdict vocabulary -> the brief's three assessment buckets.
