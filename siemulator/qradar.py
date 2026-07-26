@@ -44,6 +44,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from siemulator.config import MOCK_SOURCE, admin_key, logscale_token, qradar_prefix, qradar_token
 from siemulator.fault_inject import fault_check
+from siemulator.labels import encode_labels_header, strip_answer_key
 from siemulator.scenarios import all_scenarios_as_qradar
 from siemulator.templates import ALERT_TEMPLATES, HOSTNAMES, USERS
 
@@ -280,6 +281,7 @@ def _make_router(prefix: str) -> APIRouter:
         sort: str | None = None,
         scenarios: str | None = None,
         extras: int | None = None,
+        labels: str | None = None,
     ):
         """List active offences.
 
@@ -315,6 +317,18 @@ def _make_router(prefix: str) -> APIRouter:
                 return []
             return build_offenses(min(n, 1000))
 
+        def _with_labels(alerts: list[dict]) -> list[dict]:
+            """Emit the out-of-band ground-truth answer key as the
+            ``X-Mock-Labels`` header (brief §3), and — when the caller
+            opts into ``?labels=strip`` — remove the grading metadata from
+            the alert bodies so it can't leak into classification. Header
+            is always set; body is unchanged unless strip is requested."""
+            oids = [a.get("offense_id") or a.get("id") for a in alerts]
+            response.headers["X-Mock-Labels"] = encode_labels_header(oids)
+            if labels == "strip":
+                return [strip_answer_key(a) for a in alerts]
+            return alerts
+
         if scenarios == "all":
             full = all_scenarios_as_qradar()
             fresh = [s for s in full if s.get("offense_id") not in _SCENARIOS_SERVED]
@@ -331,7 +345,7 @@ def _make_router(prefix: str) -> APIRouter:
                 f"scenarios=all(returned={len(fresh)},served={len(_SCENARIOS_SERVED)}/{len(full)},extras={len(tail)})",
                 out,
             )
-            return out
+            return _with_labels(out)
 
         if scenarios == "batch":
             # Batch mode rotates through the curated pool 2 alerts per call.
@@ -354,14 +368,14 @@ def _make_router(prefix: str) -> APIRouter:
                 f"scenarios=batch({start + 1}-{end_idx}/{len(full)},extras={len(tail)})",
                 out,
             )
-            return out
+            return _with_labels(out)
 
         if scenarios == "replay":
             tail = _extras_tail()
             out = all_scenarios_as_qradar() + tail
             response.headers["X-Mock-Extras-Appended"] = str(len(tail))
             _record_request(request, f"scenarios=replay(extras={len(tail)})", out)
-            return out
+            return _with_labels(out)
 
         rng = request.headers.get("Range", "")
         n = 5
@@ -375,7 +389,7 @@ def _make_router(prefix: str) -> APIRouter:
         if scenarios == "mix":
             out = all_scenarios_as_qradar() + out
         _record_request(request, f"default(n={len(out)})", out)
-        return out
+        return _with_labels(out)
 
     @router.get("/api/siem/scenarios")
     async def list_scenarios(request: Request, response: Response):

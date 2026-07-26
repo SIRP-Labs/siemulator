@@ -157,3 +157,61 @@ def all_labels() -> list[dict]:
     from siemulator.scenarios import SCENARIOS
 
     return [derive_label(oid, sid, label, raw) for oid, sid, label, raw in SCENARIOS]
+
+
+def labels_by_offense_id() -> dict[int, dict]:
+    """{offense_id: envelope} for every scenario, for header lookup."""
+    return {env["offense_id"]: env for env in all_labels()}
+
+
+# ── Out-of-band delivery (brief §3) ─────────────────────────────────
+#
+# Ground truth must be able to travel with the response WITHOUT sitting
+# in the alert body, so it can't leak into whatever the consumer feeds
+# its classifier. Two moving parts:
+#   - encode_labels_header(): the answer key for the served alerts,
+#     base64(JSON), emitted as the ``X-Mock-Labels`` response header
+#     (an unknown header every SOAR ignores).
+#   - strip_answer_key(): remove the grading fields from an alert body,
+#     so a consumer that opts into header-only labels never sees the
+#     expected verdict/category in the payload.
+
+import base64  # noqa: E402 — kept local to the delivery section
+import json  # noqa: E402
+
+# Keys in an alert body that ARE the answer key — grading metadata, not
+# vendor-native fields. Stripped in header-only mode. `iocs` is NOT here:
+# real vendor alerts carry indicators, so keeping them preserves realism.
+_ANSWER_KEY_FIELDS = ("_test_meta", "test_notes")
+_ANSWER_KEY_PREFIX = "expected_"
+
+
+def encode_labels_header(offense_ids) -> str:
+    """base64(JSON) answer key for the given served offence ids, for the
+    ``X-Mock-Labels`` response header. Ids with no scenario envelope
+    (e.g. synthetic noise templates) are simply omitted."""
+    table = labels_by_offense_id()
+    payload = {str(oid): table[oid] for oid in offense_ids if oid in table}
+    blob = json.dumps(payload, separators=(",", ":")).encode()
+    return base64.b64encode(blob).decode()
+
+
+def decode_labels_header(header_value: str) -> dict:
+    """Inverse of encode_labels_header — for a grader reading the header."""
+    return json.loads(base64.b64decode(header_value).decode())
+
+
+def strip_answer_key(alert: dict) -> dict:
+    """Return a shallow copy of an alert body with grading metadata
+    removed (``_test_meta`` / ``test_notes`` / every ``expected_*`` key),
+    recursively into a nested ``_raw_alert``. The IOC list and all
+    vendor-native fields are preserved."""
+    out = {
+        k: v
+        for k, v in alert.items()
+        if k not in _ANSWER_KEY_FIELDS and not k.startswith(_ANSWER_KEY_PREFIX)
+    }
+    inner = out.get("_raw_alert")
+    if isinstance(inner, dict):
+        out["_raw_alert"] = strip_answer_key(inner)
+    return out

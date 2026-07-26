@@ -580,13 +580,13 @@ def test_scenarios_all_with_extras_appends_random(qradar_client):
     assert r.status_code == 200
     items = r.json()
     assert len(items) == 62 + 20
-    # Curated 52 come first, extras tail after
-    curated = [i for i in items if 90_010 < i["id"] < 90_200]
-    extras = [i for i in items if i["id"] > 30_000 and i["id"] < 30_000_000 and not (90_010 < i["id"] < 90_200)]
+    # Curated scenarios carry a _scenario_id; random extras never do.
+    # (Splitting by id-range is unsafe — build_offenses can pick a random
+    # offence_id inside the curated 90k window ~10% of the time.)
+    curated = [i for i in items if i.get("_scenario_id")]
+    extras = [i for i in items if not i.get("_scenario_id")]
     assert len(curated) == 62
     assert len(extras) == 20
-    # The extras carry x-mock-source but no _scenario_id (they're not curated scenarios)
-    assert all(e.get("_scenario_id") is None for e in extras)
 
 
 def test_scenarios_all_extras_cap(qradar_client):

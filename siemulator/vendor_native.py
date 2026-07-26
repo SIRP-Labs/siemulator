@@ -42,6 +42,7 @@ from collections.abc import Callable
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from siemulator.config import MOCK_SOURCE
+from siemulator.labels import encode_labels_header, strip_answer_key
 from siemulator.scenarios import SCENARIOS
 
 # Rotation state — one counter per vendor
@@ -732,6 +733,20 @@ def _stamp(response: Response) -> None:
     response.headers["x-mock-source"] = MOCK_SOURCE
 
 
+def _apply_labels(response: Response, picked: list[dict], labels: str | None) -> list[dict]:
+    """Emit the out-of-band ground-truth answer key (``X-Mock-Labels``
+    header, brief §3) for the served alerts, keyed by their scenario
+    offence id. When ``?labels=strip`` is set, remove the grading
+    metadata from the alert bodies too so it can't leak into
+    classification. Header is always emitted; bodies change only on
+    strip."""
+    oids = [a.get("_offense_id") or a.get("offense_id") or a.get("id") for a in picked]
+    response.headers["X-Mock-Labels"] = encode_labels_header(oids)
+    if labels == "strip":
+        return [strip_answer_key(a) for a in picked]
+    return picked
+
+
 def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
     """Build the vendor-native router.
 
@@ -750,6 +765,7 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
         scenarios: str | None = None,
         limit: int | None = None,
         offset: int | None = None,
+        labels: str | None = None,
     ):
         """Falcon Alerts v2-shape response.
 
@@ -777,7 +793,7 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
         total = len(picked)
         lim = limit if limit and limit > 0 else max(total, 1)
         off = offset if offset and offset > 0 else 0
-        window = picked[off:off + lim]
+        window = _apply_labels(response, picked[off:off + lim], labels)
 
         return {
             "meta": {
@@ -797,6 +813,7 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
         request: Request,
         response: Response,
         scenarios: str | None = None,
+        labels: str | None = None,
     ):
         """Microsoft Graph Security v1.0 ``alert`` collection.
 
@@ -819,12 +836,13 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
         _check_token(request, token_getter("defender"))
         _stamp(response)
         picked = _pick("defender", scenarios)
+        value = _apply_labels(response, picked, labels)
         return {
             "@odata.context": (
                 "https://graph.microsoft.com/v1.0/$metadata#Security/alerts"
             ),
-            "@odata.count": len(picked),
-            "value": picked,
+            "@odata.count": len(value),
+            "value": value,
         }
 
     @router.get("/rest/api/incidents")
@@ -835,6 +853,7 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
         scenarios: str | None = None,
         pageSize: int | None = None,  # noqa: N803 — vendor's own param name
         pageNumber: int | None = None,  # noqa: N803
+        labels: str | None = None,
     ):
         """NetWitness Respond-shape response.
 
@@ -859,7 +878,7 @@ def build_router(*, token_getter: Callable[[str], str]) -> APIRouter:
         size = pageSize if pageSize and pageSize > 0 else max(total, 1)
         page = pageNumber if pageNumber and pageNumber > 0 else 0
         start = page * size
-        window = picked[start:start + size]
+        window = _apply_labels(response, picked[start:start + size], labels)
         total_pages = max(1, (total + size - 1) // size)
 
         return {

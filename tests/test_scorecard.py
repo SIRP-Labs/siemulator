@@ -113,3 +113,75 @@ def test_scorecard_report_renders():
     report = format_report()
     assert "corpus scorecard" in report
     assert "Taxonomy" in report and "Verdict spread" in report
+
+
+# ── out-of-band label delivery (brief §3) ───────────────────────────
+
+
+def test_encode_decode_labels_header_roundtrips():
+    from siemulator.labels import (
+        decode_labels_header,
+        encode_labels_header,
+        labels_by_offense_id,
+    )
+
+    oids = list(labels_by_offense_id())[:5]
+    hdr = encode_labels_header(oids)
+    decoded = decode_labels_header(hdr)
+    assert set(decoded) == {str(o) for o in oids}
+    for o in oids:
+        assert decoded[str(o)]["offense_id"] == o
+
+
+def test_strip_answer_key_removes_grading_fields_keeps_iocs():
+    from siemulator.labels import strip_answer_key
+
+    alert = {
+        "id": 1, "iocs": [{"value": "x"}],
+        "_test_meta": {"expected_verdict": "MALICIOUS"},
+        "test_notes": "why",
+        "expected_iti_category_id": 107,
+        "expected_verdict": "MALICIOUS_CONFIRMED",
+        "_raw_alert": {"_test_meta": {}, "expected_severity": "SEV1", "iocs": []},
+    }
+    out = strip_answer_key(alert)
+    assert "_test_meta" not in out
+    assert "test_notes" not in out
+    assert not any(k.startswith("expected_") for k in out)
+    assert out["iocs"] == [{"value": "x"}]      # IOCs preserved
+    assert "_test_meta" not in out["_raw_alert"]  # recurses
+    assert not any(k.startswith("expected_") for k in out["_raw_alert"])
+
+
+def test_qradar_emits_labels_header(qradar_client):
+    from siemulator.labels import decode_labels_header
+
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=replay")
+    assert "X-Mock-Labels" in r.headers
+    decoded = decode_labels_header(r.headers["X-Mock-Labels"])
+    # every curated offence id in the body has a label envelope
+    body_ids = {str(a["id"]) for a in r.json() if 90_010 < a["id"] < 90_200}
+    assert body_ids <= set(decoded)
+    # and the envelope carries the gradeable fields
+    sample = next(iter(decoded.values()))
+    assert {"category_id", "assessment", "severity_band"} <= set(sample)
+
+
+def test_qradar_strip_removes_answer_key_from_body(qradar_client):
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=replay&labels=strip")
+    assert "X-Mock-Labels" in r.headers   # header still present
+    for a in r.json():
+        raw = a.get("_raw_alert", {})
+        assert "_test_meta" not in raw, f"{a.get('id')} leaked _test_meta in body"
+        assert not any(k.startswith("expected_") for k in raw)
+
+
+def test_qradar_default_keeps_answer_key_in_body(qradar_client):
+    """Backward-compat: without ?labels=strip the body is unchanged, so
+    the live grep-based grading keeps working until graders migrate."""
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=replay")
+    metas = [a for a in r.json() if a.get("_raw_alert", {}).get("_test_meta")]
+    assert metas, "expected _test_meta still present in body by default"
