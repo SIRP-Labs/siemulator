@@ -185,3 +185,50 @@ def test_qradar_default_keeps_answer_key_in_body(qradar_client):
     r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=replay")
     metas = [a for a in r.json() if a.get("_raw_alert", {}).get("_test_meta")]
     assert metas, "expected _test_meta still present in body by default"
+
+
+# ── v9 adversarial cases + unclassified as a valid labeled answer ───
+
+
+def test_unclassified_is_a_complete_label_not_a_gap():
+    """UNMAP-A's answer is 'unclassified' — a valid labeled outcome
+    (#1877: never fabricate an id), distinct from a None label gap. It
+    must count as a complete envelope."""
+    from siemulator.labels import all_labels
+
+    env = next(x for x in all_labels() if x["scenario_id"] == "UNMAP-A")
+    assert env["category_id"] == "unclassified"
+    assert env["complete"] is True
+    assert env["assessment"] == "VERIFICATION_REQUIRED"
+
+
+def test_adversarial_cases_present():
+    from siemulator import scenarios
+
+    out = {s["_scenario_id"] for s in scenarios.all_scenarios_as_qradar()}
+    assert {"UNMAP-A", "SAMPLE-TRAP-A", "OWNINFRA-A"} <= out
+
+
+def test_sample_trap_resolves_to_malware_not_error_row():
+    from siemulator.labels import all_labels
+
+    env = next(x for x in all_labels() if x["scenario_id"] == "SAMPLE-TRAP-A")
+    assert env["category_id"] == 107  # the word 'sample' must NOT corrupt this
+
+
+def test_own_infra_case_is_benign_suppressed():
+    from siemulator.labels import all_labels
+
+    env = next(x for x in all_labels() if x["scenario_id"] == "OWNINFRA-A")
+    assert env["assessment"] == "BENIGN"
+    assert env["is_true_positive"] is False
+
+
+def test_unclassified_excluded_from_taxonomy_present_set():
+    """The 'unclassified' answer must not pollute the taxonomy-present
+    set (which is int ids only) or the sorted report."""
+    from siemulator.scorecard import coverage
+
+    tx = coverage()["taxonomy"]
+    assert all(isinstance(c, int) for c in tx["present"])
+    assert tx["unclassified"] >= 1

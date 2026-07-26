@@ -50,9 +50,15 @@ _ASSESSMENT = {
 _SEV_RE = re.compile(r"SEV[1-5]", re.IGNORECASE)
 
 
-def _first_category(raw: dict, label: str) -> int | None:
-    """Resolve the ground-truth category id from the highest-confidence
-    signal available, or None if the scenario declares none."""
+def _first_category(raw: dict, label: str) -> int | str | None:
+    """Resolve the ground-truth category from the highest-confidence
+    signal available.
+
+    Returns an int category id, the string ``"unclassified"`` (a valid
+    *labeled* answer — the alert genuinely maps to no category and the
+    consumer must say so rather than fabricate an id, cf. #1877), or
+    None when the scenario declares no category signal at all (a real
+    label gap)."""
     meta = raw.get("_test_meta") or {}
     for candidate in (
         raw.get("expected_iti_category_id"),
@@ -60,6 +66,8 @@ def _first_category(raw: dict, label: str) -> int | None:
     ):
         if isinstance(candidate, int):
             return candidate
+        if isinstance(candidate, str) and candidate.lower() == "unclassified":
+            return "unclassified"
     for text in (str(raw.get("category", "")), str(label or "")):
         m = _LEADING_CAT.match(text)
         if m:

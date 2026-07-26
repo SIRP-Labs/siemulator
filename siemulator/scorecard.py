@@ -63,7 +63,12 @@ def coverage() -> dict:
     # By scenario_id -> raw, for vendor + IOC lane
     raw_by_oid = {oid: raw for oid, _sid, _lbl, raw in SCENARIOS}
 
-    present_cats = {x["category_id"] for x in labels if x["category_id"] is not None}
+    present_cats = {
+        x["category_id"]
+        for x in labels
+        if isinstance(x["category_id"], int)
+    }
+    unclassified = sum(1 for x in labels if x["category_id"] == "unclassified")
     missing_canonical = [c for c in CANONICAL_CATEGORIES if c not in present_cats]
     missing_tail = [c for c in TAIL_CATEGORIES if c not in present_cats]
 
@@ -99,6 +104,7 @@ def coverage() -> dict:
             "present": sorted(present_cats),
             "missing_canonical": missing_canonical,
             "missing_tail": missing_tail,
+            "unclassified": unclassified,
             "coverage_pct": round(
                 100
                 * (len(CANONICAL_CATEGORIES) - len(missing_canonical))

@@ -2830,6 +2830,141 @@ _REAL_QR_B = _j(r"""
 """)
 
 
+# ── v9 ADVERSARIAL payloads (2026-07-26) — brief §5 failure-mode probes.
+# The three highest-value cases the brief calls out that the corpus did
+# not yet cover. Offence IDs 90125-90127.
+
+_UNMAP_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "A1_unmappable_no_category_signal",
+    "expected_verdict": "VERIFICATION_REQUIRED",
+    "expected_category_id": "unclassified",
+    "expected_guardrails_that_should_fire": ["never_fabricate_category_id"],
+    "expected_vendor_semantics": ["classification.unmappable_resolves_unclassified"]
+  },
+  "source": "CrowdStrike Falcon",
+  "event_type": "DetectionSummaryEvent",
+  "timestamp": "2026-07-26T08:00:00Z",
+  "severity": "Medium",
+  "confidence": 45,
+  "alert": {
+    "name": "Suspicious process behaviour — no clean category signal",
+    "description": "EDR flagged an unusual-but-ambiguous process pattern (rare parent/child, moderate ML score) with NO category-defining behaviour: no encryption, no C2, no exfil, no persistence, no credential access. There is no ingest category on the alert either. Tests #1877 — the consumer must resolve this to Unclassified and hold for analyst review, NEVER fabricate a category id (the no-match fallback bug picked sorted_ids[0]=103)."
+  },
+  "parsed": {
+    "device_hostname": "ENG-WKS-330",
+    "process_name": "helpersvc.exe",
+    "command_line": "helpersvc.exe --run",
+    "parent_process": "svchost.exe",
+    "ml_score": 0.44,
+    "has_encoded_command": false,
+    "has_c2": false,
+    "has_exfil": false,
+    "has_persistence": false,
+    "has_credential_access": false
+  },
+  "iocs": [
+    {"type": "process", "value": "helpersvc.exe", "pattern": "ambiguous_process_no_cosignal",
+     "note": "No co-signal in any category direction — the defining property of the unmappable case."}
+  ],
+  "expected_iti_category_id": "unclassified",
+  "expected_iti_attack_severity": "SEV3",
+  "expected_verdict": "VERIFICATION_REQUIRED",
+  "expected_disposition": "unclassified_pending_analyst_review",
+  "expected_severity": "SEV3",
+  "test_notes": "Unmappable-alert test (#1877). No category-defining behaviour and no ingest category, so classification MUST return Unclassified and route to analyst review. Failure mode being probed: the no-match fallback that silently returned sorted_ids[0] (103) — a fabricated category id. Grader: persisted category must be Unclassified/none, never a concrete id."
+}
+""")
+
+_SAMPLE_TRAP_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "A2_corrupt_category_sample_word_trap",
+    "expected_verdict": "VERIFICATION_REQUIRED",
+    "expected_category_id": 107,
+    "expected_guardrails_that_should_fire": ["never_resolve_to_html_error_category_row"],
+    "expected_vendor_semantics": ["classification.sample_word_does_not_corrupt_category"]
+  },
+  "source": "CrowdStrike Falcon",
+  "event_type": "DetectionSummaryEvent",
+  "timestamp": "2026-07-26T08:10:00Z",
+  "severity": "Medium",
+  "confidence": 70,
+  "category": "107 Malware",
+  "qradar_categories": ["Malware", "Sandbox"],
+  "alert": {
+    "name": "Malware sample submitted to sandbox for detonation",
+    "description": "A suspicious binary was quarantined and a sample submitted to the sandbox. The word 'sample' appears in the narrative — tests the corrupt-category trap where 'sample' text caused the resolver to match demo3's HTML-error category row instead of 107 Malware. Correct category is 107; the word 'sample' must not corrupt it."
+  },
+  "parsed": {
+    "device_hostname": "IT-WKS-045",
+    "process_name": "unknown_dropper.exe",
+    "process_sha256": "217aa6561129b2ca5958da9dde6223908ddbfc978b2b92946cda9e2e35998931",
+    "action": "quarantined",
+    "sandbox_submitted": true
+  },
+  "iocs": [
+    {"type": "hash_sha256", "value": "217aa6561129b2ca5958da9dde6223908ddbfc978b2b92946cda9e2e35998931", "pattern": "ti_abusech_clearfake_payload",
+     "note": "Real ClearFake payload SHA-256 (abuse.ch ThreatFox) — enrichment resolves MALICIOUS."}
+  ],
+  "expected_iti_category_id": 107,
+  "expected_iti_category_name": "Malware",
+  "expected_iti_attack_severity": "SEV2",
+  "expected_verdict": "VERIFICATION_REQUIRED",
+  "expected_disposition": "true_positive_malware_sample_pending_sandbox",
+  "expected_severity": "SEV2",
+  "expected_ti_sources": ["ThreatFox", "VirusTotal", "MalwareBazaar"],
+  "test_notes": "Corrupt-category trap. The narrative contains the word 'sample' — the failure mode being probed is a category resolver that string-matched 'sample' onto a corrupt/HTML-error category row on demo3. Correct category is 107 Malware. Grader: persisted category must be 107, never the HTML-error row."
+}
+""")
+
+_OWNINFRA_A = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "A3_own_infra_noise_suppression",
+    "expected_verdict": "BENIGN",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["suppress_own_infra_not_enrich"],
+    "expected_vendor_semantics": ["enrichment.own_siem_forwarder_ip_suppressed"]
+  },
+  "source": "QRadar",
+  "event_type": "Offense",
+  "timestamp": "2026-07-26T08:20:00Z",
+  "severity": "Low",
+  "confidence": 30,
+  "category": "110 Network Anomaly",
+  "qradar_categories": ["Network Anomaly", "Self-Monitoring"],
+  "alert": {
+    "name": "High-volume outbound to internal log-forwarder (own SIEM infra)",
+    "description": "A host is sending a steady high-volume stream to the tenant's OWN SIEM collector / syslog forwarder. This is the monitoring pipeline observing itself. Tests own-infra-noise suppression: the destination is the customer's own infrastructure and must be suppressed, NOT enriched or escalated as suspicious beaconing."
+  },
+  "parsed": {
+    "src": "10.20.7.60",
+    "dst": "10.20.0.10",
+    "dst_role": "internal_siem_log_forwarder",
+    "dport": 514,
+    "proto": "tcp",
+    "device_hostname": "APP-WKS-060",
+    "bytes_sent": 4200000,
+    "note": "10.20.0.10 is the tenant's own QRadar event collector / syslog forwarder."
+  },
+  "iocs": [
+    {"type": "ip", "value": "10.20.0.10", "pattern": "own_infra_siem_forwarder",
+     "note": "The tenant's OWN SIEM collector IP — self-monitoring traffic. Must be suppressed, not enriched or escalated."},
+    {"type": "ip", "value": "10.20.7.60", "pattern": "internal_corp_source"}
+  ],
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Network Anomaly",
+  "expected_iti_attack_severity": "SEV5",
+  "expected_verdict": "BENIGN",
+  "expected_disposition": "false_positive_own_infra_self_monitoring",
+  "expected_severity": "SEV5",
+  "test_notes": "Own-infra-noise test. The destination 10.20.0.10 is the tenant's own SIEM log-forwarder; the high outbound volume is the monitoring pipeline observing itself. Consumer must suppress on own-infra context, NOT enrich the internal IP or escalate as C2 beaconing. Grader: verdict BENIGN, no escalation, own-infra IP not treated as an external IOC."
+}
+""")
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -2914,6 +3049,11 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 122, "REAL-NW-A",  "107 Malware — NetWitness Mozi ELF download (real abuse.ch URLhaus IOC)", _REAL_NW_A),
     (SCENARIO_ID_BASE + 123, "REAL-QR-A",  "109 C2 — QRadar Emotet C2 callout (real abuse.ch Feodo IOC)", _REAL_QR_A),
     (SCENARIO_ID_BASE + 124, "REAL-QR-B",  "110 Network Anomaly — QRadar benign infra baseline (real benign IOCs)", _REAL_QR_B),
+    # v9 ADVERSARIAL payloads (2026-07-26) — brief §5 failure-mode probes.
+    # Offence IDs 90125-90127.
+    (SCENARIO_ID_BASE + 125, "UNMAP-A",       "Unclassified — suspicious process, no category signal (#1877 no-fabricate)", _UNMAP_A),
+    (SCENARIO_ID_BASE + 126, "SAMPLE-TRAP-A", "107 Malware — 'sample' word must not corrupt category to HTML-error row", _SAMPLE_TRAP_A),
+    (SCENARIO_ID_BASE + 127, "OWNINFRA-A",    "110 Network Anomaly — own SIEM forwarder IP, suppress not enrich", _OWNINFRA_A),
 ]
 
 
