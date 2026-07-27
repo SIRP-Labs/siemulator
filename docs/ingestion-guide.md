@@ -86,6 +86,42 @@ dedup state (independent of the QRadar counter). Reset a specific
 vendor's state via `POST /_debug/reset_vendor?vendor=crowdstrike`
 (or `?vendor=all`).
 
+## Grading mode — don't let the corpus leak its own answers
+
+Every curated scenario carries a ground-truth label. By default that
+label is **visible in the alert**: the offence `description` begins with
+a `[SCENARIO-ID — 103 Ransomware — ...]` tag, and that description
+becomes the incident subject downstream. A consumer whose classifier
+reads the subject can therefore score "correct" by echoing the label out
+of its own input — which makes any category-accuracy number meaningless.
+
+Use `?labels=blind` on **any run where you intend to measure
+classification**:
+
+| Mode | Alert body | Use when |
+|---|---|---|
+| _(default)_ | Full — scenario tag, category strings, `_test_meta`, `expected_*` all present | Eyeballing the corpus; grading by grep on `_test_meta` |
+| `?labels=strip` | Explicit grading metadata removed (`_test_meta`, `test_notes`, `expected_*`) | You want the answer key out of the body but keep the scenario tag |
+| `?labels=blind` | **Also** removes the implicit leaks: the `[scenario — category]` tag in the description, the category strings, the mock log-source name, and the correlation handles | **Measuring category / assessment accuracy** |
+
+The answer key is never lost — only moved. Every response carries an
+`X-Mock-Labels` header: base64(JSON) keyed by offence id, holding the
+full envelope (`category_id`, `assessment`, `severity_band`,
+`is_true_positive`, `must_extract_iocs`, `rationale`). A grader joins it
+on the offence id (`_offense_id` on the vendor-native shapes, which is
+preserved in blind mode precisely so the join stays explicit):
+
+```bash
+curl -sD /tmp/h "$SIEM/qradar/api/siem/offenses?token=$TOK&scenarios=replay&labels=blind" -o /tmp/alerts.json
+grep -i '^x-mock-labels:' /tmp/h | cut -d' ' -f2 | base64 -d | jq '."90131"'
+# => {"category_id":103,"assessment":"MALICIOUS",...}
+```
+
+Blinding does not damage the alert: the vendor source, the narrative,
+the technical detail (CVEs, command lines, hashes) and all IOCs are
+preserved, so the consumer still has everything it needs to classify on
+the merits. Only the answer is removed.
+
 ## Authentication patterns
 
 siemulator accepts **three** auth channels per surface, and the same

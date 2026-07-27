@@ -4190,7 +4190,14 @@ def _wrap_as_qradar_offence(
     except Exception:
         start_ms = 1748000000000  # fallback ~ 2025-05-23
 
-    # Build description: scenario tag + source + first impactful field
+    # Build description: scenario tag + source + first impactful field.
+    #
+    # ANSWER LEAK: ``step_label`` embeds the expected category ("103
+    # Ransomware — ..."), and this description becomes iti_subject
+    # downstream. A consumer whose classifier reads the subject can score
+    # "correct" by echoing the label back — making category accuracy
+    # meaningless. ``blind_labels()`` (below) strips it; the mapping is
+    # recoverable only from the out-of-band X-Mock-Labels header.
     summary_bits = [f"[{scenario_id} — {step_label}]", f"Source: {source}"]
     for k in ("alert", "detection", "anomaly", "risk_policy", "event_type"):
         v = raw.get(k)

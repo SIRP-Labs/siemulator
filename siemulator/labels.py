@@ -246,6 +246,83 @@ def decode_labels_header(header_value: str) -> dict:
     return json.loads(base64.b64decode(header_value).decode())
 
 
+# The scenario tag that _wrap_as_qradar_offence prepends:
+#   "[<SCENARIO-ID> — <step label>] | Source: ... | <narrative>"
+# The step label is where the expected category lives ("103 Ransomware
+# — ..."), so the whole bracketed tag is dropped rather than word-
+# scrubbed. Word-level redaction was tried and rejected: it mangles
+# genuine narrative ("firmware compromise" -> "firmware", "no network
+# IOCs" -> "no IOCs") while still leaking partial matches like
+# "Web App". Removing the tag removes the label; the vendor's own
+# event-type vocabulary (FirmwareAnomaly, CICDCompromise) is left
+# intact because a real alert carries it.
+_SCENARIO_TAG_RE = re.compile(r"^\s*\[[^\]]*\]\s*\|?\s*")
+
+
+def _redact_category_text(text: str) -> str:
+    """Drop the leading ``[scenario-id — step-label]`` tag from a
+    description, leaving the vendor source + narrative untouched."""
+    return _SCENARIO_TAG_RE.sub("", str(text)).strip(" -—–|")
+
+
+def blind_labels(alert: dict) -> dict:
+    """Remove every answer-carrying field from a served offence.
+
+    ``strip_answer_key`` removes the explicit grading metadata; this goes
+    further and removes the *implicit* leaks — the ones that let a
+    consumer classify by echoing its input back:
+
+    - ``description``  the scenario tag + step label, which becomes
+      ``iti_subject`` downstream and embeds "103 Ransomware"
+    - ``categories``   QRadar category strings naming the answer
+    - ``log_sources``  the "SARA Scenario <ID> mock source" name
+    - ``_scenario_id`` / ``_scenario_step`` correlation handles
+    - ``_raw_alert.category`` the "NNN Name" string
+
+    The offence id is preserved — that is the join key a grader uses
+    against the out-of-band ``X-Mock-Labels`` header, and it carries no
+    semantic hint of the answer.
+    """
+    out = strip_answer_key(alert)
+
+    if "description" in out:
+        out["description"] = _redact_category_text(out["description"])
+    if "categories" in out:
+        out["categories"] = ["Security Event"]
+    if isinstance(out.get("log_sources"), list):
+        out["log_sources"] = [
+            {**ls, "name": _redact_category_text(str(ls.get("name", "")))}
+            if isinstance(ls, dict) else ls
+            for ls in out["log_sources"]
+        ]
+
+    # Answer-carrying keys, stripped wherever they appear. The vendor
+    # mappers (Falcon / Graph / NetWitness) write `category` and the
+    # correlation handles at the TOP level of their own shapes, not just
+    # inside _raw_alert — so this runs on both levels.
+    #
+    # ``_offense_id`` is deliberately NOT stripped: it is the grader's
+    # explicit join key against the X-Mock-Labels header, and an integer
+    # id carries no hint of the answer. (On the vendor endpoints `id` is
+    # a vendor-shaped string, so without _offense_id a grader would have
+    # to parse the offence id back out of a composite — fragile.)
+    leak_keys = (
+        "_scenario_id", "_scenario_step",
+        "category", "qradar_categories",
+    )
+    for k in leak_keys:
+        out.pop(k, None)
+
+    raw = out.get("_raw_alert")
+    if isinstance(raw, dict):
+        raw = dict(raw)
+        for k in leak_keys:
+            raw.pop(k, None)
+        out["_raw_alert"] = raw
+
+    return out
+
+
 def strip_answer_key(alert: dict) -> dict:
     """Return a shallow copy of an alert body with grading metadata
     removed (``_test_meta`` / ``test_notes`` / every ``expected_*`` key),

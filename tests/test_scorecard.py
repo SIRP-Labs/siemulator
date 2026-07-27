@@ -271,3 +271,122 @@ def test_category_conflict_entries_name_both_sides():
     for cf in category_conflicts():
         assert {"scenario_id", "category_id", "self_name",
                 "authoritative_name"} <= set(cf)
+
+
+# ── answer-leak prevention (brief §3) ───────────────────────────────
+
+
+def test_default_mode_leaks_labels_by_design():
+    """Documents the hazard: without ?labels=blind the description
+    embeds the expected category ('103 Ransomware'), and that becomes
+    iti_subject downstream. Any run measuring CATEGORY ACCURACY must use
+    blind mode — otherwise a consumer can score 'correct' by echoing the
+    label out of its own input."""
+    import re
+
+    from siemulator.scenarios import all_scenarios_as_qradar
+
+    leaky = [
+        s for s in all_scenarios_as_qradar()
+        if re.search(r"\b1[0-2][0-9]\b", s.get("description", ""))
+    ]
+    assert leaky, "expected the raw corpus to embed category ids (hazard is real)"
+
+
+def test_blind_mode_removes_every_label_leak(qradar_client):
+    """?labels=blind must remove ALL answer-carrying signal: category id
+    in the description, the scenario tag, the correlation handles, and
+    the category strings."""
+    import re
+
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=replay&labels=blind")
+    assert r.headers.get("X-Mock-Labels-Mode") == "blind"
+    body = r.json()
+    assert body
+
+    for a in body:
+        desc = a.get("description", "")
+        assert not re.search(r"\b1[0-2][0-9]\b", desc), f"category id leaked: {desc[:80]}"
+        assert not desc.lstrip().startswith("["), f"scenario tag leaked: {desc[:80]}"
+        assert a.get("_scenario_id") is None
+        assert a.get("_scenario_step") is None
+        assert a.get("categories") == ["Security Event"]
+        raw = a.get("_raw_alert", {})
+        assert "category" not in raw
+        assert "qradar_categories" not in raw
+        assert "_test_meta" not in raw
+
+
+def test_blind_mode_preserves_narrative_and_iocs(qradar_client):
+    """Blinding must not damage the alert itself — the vendor source,
+    the narrative and the IOCs all survive, so the consumer still has
+    everything it needs to classify on the merits."""
+    c = qradar_client(token="stok")
+    body = c.get(
+        "/qradar/api/siem/offenses?token=stok&scenarios=replay&labels=blind"
+    ).json()
+
+    akira = next(a for a in body if a["id"] == 90131)
+    assert "Source: Microsoft Defender for Endpoint" in akira["description"]
+    assert "Akira" in akira["description"]          # vendor's own alert text
+    assert akira["_raw_alert"]["iocs"]              # IOCs preserved for enrichment
+
+    clop = next(a for a in body if a["id"] == 90128)
+    assert "CVE-2026-12569" in clop["description"]  # technical detail preserved
+    # ...but the expected category is gone
+    assert "113" not in clop["description"]
+    assert "Web App" not in clop["description"]
+
+
+def test_blind_labels_still_recoverable_from_header(qradar_client):
+    """The answer key is not lost, only moved: a grader joins the header
+    on offence id. Blinding the body must not blind the header."""
+    from siemulator.labels import decode_labels_header
+
+    c = qradar_client(token="stok")
+    r = c.get("/qradar/api/siem/offenses?token=stok&scenarios=replay&labels=blind")
+    decoded = decode_labels_header(r.headers["X-Mock-Labels"])
+
+    # every blinded offence is still gradeable via the header
+    for a in r.json():
+        env = decoded.get(str(a["id"]))
+        if env is None:
+            continue
+        assert "category_id" in env and "assessment" in env
+    assert decoded["90131"]["category_id"] == 103   # RECENT-AKIRA
+    assert decoded["90128"]["category_id"] == 113   # RECENT-CLOP
+
+
+def test_vendor_endpoints_blind_and_stay_joinable():
+    """Blind mode must work on the vendor-native shapes too — they write
+    `category` and the correlation handles at their own TOP level, not
+    just inside _raw_alert. And every blinded alert must stay joinable
+    to the header via the explicit _offense_id key (the vendor `id` is a
+    vendor-shaped string, so a grader must not have to parse it)."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from siemulator.labels import decode_labels_header
+    from siemulator.vendor_native import build_router
+
+    app = FastAPI()
+    app.include_router(build_router(token_getter=lambda _v: ""))
+    c = TestClient(app)
+
+    for path, key in (
+        ("/alerts/entities/alerts/v2", "resources"),
+        ("/v1.0/security/alerts", "value"),
+        ("/rest/api/incidents", "items"),
+    ):
+        r = c.get(f"{path}?scenarios=replay&labels=blind")
+        body = r.json()[key]
+        assert body, path
+        header = decode_labels_header(r.headers["X-Mock-Labels"])
+        for a in body:
+            assert a.get("_scenario_id") is None, f"{path} leaked _scenario_id"
+            assert "category" not in a, f"{path} leaked category"
+            assert "qradar_categories" not in a, f"{path} leaked qradar_categories"
+            assert "_test_meta" not in a, f"{path} leaked _test_meta"
+            # explicit join key survives and resolves
+            assert str(a["_offense_id"]) in header, f"{path} not joinable"

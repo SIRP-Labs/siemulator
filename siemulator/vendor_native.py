@@ -42,7 +42,7 @@ from collections.abc import Callable
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from siemulator.config import MOCK_SOURCE
-from siemulator.labels import encode_labels_header, strip_answer_key
+from siemulator.labels import blind_labels, encode_labels_header, strip_answer_key
 from siemulator.scenarios import SCENARIOS
 
 # Rotation state — one counter per vendor
@@ -742,6 +742,9 @@ def _apply_labels(response: Response, picked: list[dict], labels: str | None) ->
     strip."""
     oids = [a.get("_offense_id") or a.get("offense_id") or a.get("id") for a in picked]
     response.headers["X-Mock-Labels"] = encode_labels_header(oids)
+    response.headers["X-Mock-Labels-Mode"] = labels or "off"
+    if labels == "blind":
+        return [blind_labels(a) for a in picked]
     if labels == "strip":
         return [strip_answer_key(a) for a in picked]
     return picked

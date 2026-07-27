@@ -44,7 +44,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from siemulator.config import MOCK_SOURCE, admin_key, logscale_token, qradar_prefix, qradar_token
 from siemulator.fault_inject import fault_check
-from siemulator.labels import encode_labels_header, strip_answer_key
+from siemulator.labels import blind_labels, encode_labels_header, strip_answer_key
 from siemulator.scenarios import all_scenarios_as_qradar
 from siemulator.templates import ALERT_TEMPLATES, HOSTNAMES, USERS
 
@@ -319,12 +319,23 @@ def _make_router(prefix: str) -> APIRouter:
 
         def _with_labels(alerts: list[dict]) -> list[dict]:
             """Emit the out-of-band ground-truth answer key as the
-            ``X-Mock-Labels`` header (brief §3), and — when the caller
-            opts into ``?labels=strip`` — remove the grading metadata from
-            the alert bodies so it can't leak into classification. Header
-            is always set; body is unchanged unless strip is requested."""
+            ``X-Mock-Labels`` header (brief §3).
+
+            ``?labels=strip`` removes the explicit grading metadata from
+            the bodies. ``?labels=blind`` goes further and also removes
+            the IMPLICIT leaks — the scenario tag in ``description``
+            (which becomes iti_subject and embeds "103 Ransomware"),
+            the category strings, the mock log-source name and the
+            correlation handles. Use blind for any run where category
+            accuracy is being measured: otherwise a consumer can score
+            "correct" by echoing the label out of its own input.
+
+            Header is always set; bodies change only on strip/blind."""
             oids = [a.get("offense_id") or a.get("id") for a in alerts]
             response.headers["X-Mock-Labels"] = encode_labels_header(oids)
+            response.headers["X-Mock-Labels-Mode"] = labels or "off"
+            if labels == "blind":
+                return [blind_labels(a) for a in alerts]
             if labels == "strip":
                 return [strip_answer_key(a) for a in alerts]
             return alerts
