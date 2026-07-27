@@ -2965,6 +2965,209 @@ _OWNINFRA_A = _j(r"""
 """)
 
 
+# ── v10 RECENT payloads (2026-07-26) — real campaigns, last ~3 months.
+# Sourced from public reporting May-Jul 2026 (CVE + campaign detail cited
+# in each test_notes). Offence IDs 90128-90131. One per vendor shape.
+# Where a campaign has public IOCs (JadePuffer C2), they are used and
+# tagged ti_*; where not, the load-bearing anchor is the CVE + technique
+# and IOCs are marked campaign-pattern, not fabricated TI attributions.
+
+_RECENT_CLOP = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "N1_clop_windchill_cve_2026_12569",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 113,
+    "expected_guardrails_that_should_fire": ["enrich_before_verdict"],
+    "expected_vendor_semantics": ["web_attack.unauth_rce_webshell_drop", "extortion.mass_email_notification"]
+  },
+  "source": "QRadar",
+  "event_type": "Offense",
+  "timestamp": "2026-07-22T11:05:00Z",
+  "severity": "Critical",
+  "confidence": 92,
+  "category": "113 Web Application Attack",
+  "expected_iti_category_id": 113,
+  "expected_iti_category_name": "Web Application Attack",
+  "qradar_categories": ["Web Application Attack", "Webshell"],
+  "alert": {
+    "name": "Cl0p — unauthenticated RCE + JSP webshell on PTC Windchill (CVE-2026-12569)",
+    "description": "Internet-facing PTC Windchill/FlexPLM instance hit with the Cl0p CVE-2026-12569 chain: pre-auth info-disclosure on the FlexPLM WSDL endpoint chained to a Windchill login-servlet deserialization flaw, yielding unauthenticated RCE and a hex-named JSP webshell dropped under /Windchill/login/. Data-theft double-extortion campaign active since 20 Jul 2026."
+  },
+  "parsed": {
+    "dst_host": "windchill.acme.local",
+    "dst_ip": "10.30.8.20",
+    "url_path": "/Windchill/servlet/WSDL",
+    "webshell_path": "/Windchill/login/a1f9c3.jsp",
+    "cve": "CVE-2026-12569",
+    "http_method": "POST",
+    "user_agent": "python-requests/2.31.0",
+    "src_ip": "45.135.232.19"
+  },
+  "iocs": [
+    {"type": "cve", "value": "CVE-2026-12569", "pattern": "ti_exploited_cve",
+     "note": "Cl0p Windchill/FlexPLM unauth-RCE, CVSS 9.8, disclosed 2026-06-17 — actively exploited (KEV)."},
+    {"type": "url_path", "value": "/Windchill/login/a1f9c3.jsp", "pattern": "clop_webshell_path",
+     "note": "Hex-named JSP webshell under /Windchill/login/ — the campaign's signature artifact."},
+    {"type": "ip", "value": "45.135.232.19", "pattern": "campaign_source_ip",
+     "note": "Observed exploit source; campaign-pattern (not an independently-catalogued TI attribution)."}
+  ],
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_web_rce",
+  "expected_severity": "SEV1",
+  "expected_ti_sources": ["CISA KEV", "vendor advisory (PTC)"],
+  "test_notes": "REAL campaign (Cl0p, Jul 2026). Load-bearing anchors: CVE-2026-12569 + the /Windchill/login/*.jsp hex webshell path + the FlexPLM WSDL pre-auth chain. Consumer should classify Web Application Attack (113), MALICIOUS, and recommend containment + webshell removal + patch. Source: thehackernews.com / bleepingcomputer 2026-07."
+}
+""")
+
+_RECENT_JADE = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "N2_jadepuffer_llm_ransomware_langflow",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 103,
+    "expected_guardrails_that_should_fire": ["enrich_before_verdict", "propose_destructive_actions_on_confirmed_ransomware"],
+    "expected_vendor_semantics": ["enrichment.real_c2_ip_resolves_malicious", "ransomware.database_encryption_signal"]
+  },
+  "source": "CrowdStrike Falcon",
+  "event_type": "DetectionSummaryEvent",
+  "timestamp": "2026-07-18T02:30:00Z",
+  "severity": "Critical",
+  "confidence": 95,
+  "category": "103 Ransomware",
+  "expected_iti_category_id": 103,
+  "expected_iti_category_name": "Ransomware",
+  "qradar_categories": ["Ransomware", "AI-Driven Attack"],
+  "detection": {
+    "name": "JadePuffer — LLM-agent-driven ransomware (Langflow CVE-2025-3248)",
+    "description": "Initial access via Langflow RCE (CVE-2025-3248), then an autonomous LLM agent ran the full chain — recon, credential theft, lateral movement, privilege escalation, database encryption — over 600+ payloads. Beacon to 45.131.66.106:4444 every 30 min; README_RANSOM table created in the target DB.",
+    "technique": "T1486",
+    "tactic": "Impact"
+  },
+  "host": {"hostname": "DB-PROD-07", "ip": "10.30.14.7", "s3_score": 95},
+  "process": {"name": "python3", "command_line": "python3 -c <langflow RCE stager>", "parent": "uvicorn"},
+  "network": {"remote_ip": "45.131.66.106", "remote_port": 4444, "beacon_interval_seconds": 1800, "connection_direction": "outbound"},
+  "iocs": [
+    {"type": "ip", "value": "45.131.66.106", "pattern": "ti_jadepuffer_c2",
+     "note": "JadePuffer C2 (public IOC, Sysdig report) — beacon :4444 every 30 min."},
+    {"type": "ip", "value": "64.20.53.230", "pattern": "ti_jadepuffer_staging",
+     "note": "JadePuffer staging server (public IOC)."},
+    {"type": "cve", "value": "CVE-2025-3248", "pattern": "ti_exploited_cve",
+     "note": "Langflow unauth RCE — JadePuffer initial access."},
+    {"type": "artifact", "value": "README_RANSOM", "pattern": "jadepuffer_ransom_table",
+     "note": "DB table the agent creates as the ransom note — campaign signature."}
+  ],
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_ransomware",
+  "expected_severity": "SEV1",
+  "expected_ti_sources": ["Sysdig", "AbuseIPDB", "ThreatFox"],
+  "expected_destructive_actions": ["contain_host", "block_ip", "isolate_database"],
+  "test_notes": "REAL campaign (JadePuffer, Jul 2026 — first end-to-end LLM-agent ransomware). Real public IOCs: C2 45.131.66.106:4444, staging 64.20.53.230, Langflow CVE-2025-3248, README_RANSOM table. Consumer must classify Ransomware (103), MALICIOUS, propose destructive-action approvals. Source: Sysdig / securityaffairs / bleepingcomputer 2026-07."
+}
+""")
+
+_RECENT_QILIN = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "N3_qilin_checkpoint_vpn_cve_2026_50751",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 110,
+    "expected_guardrails_that_should_fire": ["enrich_before_verdict"],
+    "expected_vendor_semantics": ["intrusion.vpn_auth_bypass_zero_day"]
+  },
+  "source": "NetWitness",
+  "event_type": "NetWitness-Alert",
+  "timestamp": "2026-07-14T19:40:00Z",
+  "severity": "Critical",
+  "confidence": 90,
+  "category": "110 Intrusion",
+  "expected_iti_category_id": 110,
+  "expected_iti_category_name": "Intrusion",
+  "qradar_categories": ["Intrusion", "VPN"],
+  "alert": {
+    "name": "Qilin — Check Point Remote Access VPN auth bypass (CVE-2026-50751)",
+    "description": "Unauthenticated remote attacker bypassed authentication on an internet-facing Check Point Mobile Access / SSL VPN and established a remote-access VPN session — the CVE-2026-50751 zero-day exploited in the wild by Qilin ransomware affiliates. CISA gave federal agencies 3 days to patch."
+  },
+  "raw_log": {
+    "format": "NetWitness-Syslog",
+    "syslog_wrapper": "<134>1 2026-07-14T19:40:00Z nw-concentrator-01 nw - - -",
+    "body": "cat=Intrusion cs1=vpn-auth-bypass esrc=203.0.113.66 edst=10.30.0.5 edst_hostname=cp-vpn-gw-01 dpt=443 proto=tcp cve=CVE-2026-50751 alert.id=NW-ALERT-2026-07-14-0042 alert.name=CheckPointVPNAuthBypass rule=nw-rule-119 confidence=90 severity=critical act=allow event.time=2026-07-14T19:40:00Z"
+  },
+  "parsed": {
+    "cat": "Intrusion",
+    "esrc": "203.0.113.66",
+    "edst": "10.30.0.5",
+    "edst_hostname": "cp-vpn-gw-01",
+    "dpt": 443,
+    "proto": "tcp",
+    "cve": "CVE-2026-50751",
+    "alert_name": "CheckPointVPNAuthBypass"
+  },
+  "iocs": [
+    {"type": "cve", "value": "CVE-2026-50751", "pattern": "ti_exploited_cve",
+     "note": "Check Point Remote Access VPN auth-bypass zero-day, exploited by Qilin affiliates (CISA KEV, 3-day patch order)."},
+    {"type": "hostname", "value": "cp-vpn-gw-01", "pattern": "internal_corp_host"}
+  ],
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_vpn_compromise",
+  "expected_severity": "SEV1",
+  "expected_ti_sources": ["CISA KEV", "vendor advisory (Check Point)"],
+  "test_notes": "REAL campaign (Qilin, Jul 2026). Load-bearing anchor: CVE-2026-50751 Check Point VPN auth bypass exploited in the wild. Consumer should classify Intrusion (110), MALICIOUS, recommend VPN patch + session review + credential reset. Source: bleepingcomputer / CISA KEV 2026-07."
+}
+""")
+
+_RECENT_AKIRA = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "N4_akira_ransomware_top_group",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 103,
+    "expected_guardrails_that_should_fire": ["propose_destructive_actions_on_confirmed_ransomware"],
+    "expected_vendor_semantics": ["ransomware.encryption_signal", "ransomware.shadow_copy_deletion_signal"]
+  },
+  "source": "Microsoft Defender for Endpoint",
+  "event_type": "Graph-Security-Alert",
+  "timestamp": "2026-06-28T03:15:00Z",
+  "severity": "High",
+  "confidence": 94,
+  "category": "103 Ransomware",
+  "expected_iti_category_id": 103,
+  "expected_iti_category_name": "Ransomware",
+  "qradar_categories": ["Ransomware", "Malware Outbreak"],
+  "alert": {
+    "name": "Akira ransomware — mass encryption + .akira extension + shadow-copy deletion",
+    "description": "Akira (the most active ransomware group in June 2026) detonated on a file server: mass file encryption appending the .akira extension, shadow copies deleted via vssadmin, akira_readme.txt dropped in every directory. Post-exploitation followed VPN-appliance initial access consistent with Akira's 2026 tradecraft."
+  },
+  "parsed": {
+    "device_hostname": "FS-CORP-02",
+    "user": "ACME\\svc_backup",
+    "process_name": "akira.exe",
+    "command_line": "akira.exe -encryption_path C:\\ -share",
+    "file_mass_encryption": true,
+    "shadow_copy_deletion": true,
+    "ransom_note_dropped": "akira_readme.txt",
+    "encryption_extension": ".akira"
+  },
+  "iocs": [
+    {"type": "process", "value": "akira.exe", "pattern": "akira_ransomware_binary",
+     "note": "Akira encryptor — campaign-pattern; behavioural anchors (mass encryption + shadow-copy deletion + ransom note) are the load-bearing signals."},
+    {"type": "file_extension", "value": ".akira", "pattern": "akira_encryption_extension"},
+    {"type": "file", "value": "akira_readme.txt", "pattern": "akira_ransom_note"}
+  ],
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_confirmed_ransomware",
+  "expected_severity": "SEV1",
+  "expected_destructive_actions": ["contain_host", "isolate_share", "block_hash"],
+  "test_notes": "REAL group (Akira — most active ransomware group June 2026). Behavioural anchors are load-bearing (mass encryption + .akira extension + shadow-copy deletion + akira_readme.txt), consistent with all-four-signals-present -> Ransomware (103), MALICIOUS, destructive-action approvals. Source: cm-alliance / Arete ransomware trends June 2026."
+}
+""")
+
+
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -3054,6 +3257,12 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 125, "UNMAP-A",       "Unclassified — suspicious process, no category signal (#1877 no-fabricate)", _UNMAP_A),
     (SCENARIO_ID_BASE + 126, "SAMPLE-TRAP-A", "107 Malware — 'sample' word must not corrupt category to HTML-error row", _SAMPLE_TRAP_A),
     (SCENARIO_ID_BASE + 127, "OWNINFRA-A",    "110 Network Anomaly — own SIEM forwarder IP, suppress not enrich", _OWNINFRA_A),
+    # v10 RECENT payloads (2026-07-26) — real campaigns from the last ~3
+    # months (public reporting May-Jul 2026). Offence IDs 90128-90131.
+    (SCENARIO_ID_BASE + 128, "RECENT-CLOP",   "113 Web App Attack — Cl0p PTC Windchill unauth RCE + webshell (CVE-2026-12569)", _RECENT_CLOP),
+    (SCENARIO_ID_BASE + 129, "RECENT-JADE",   "103 Ransomware — JadePuffer LLM-agent ransomware, Langflow CVE-2025-3248 (real C2)", _RECENT_JADE),
+    (SCENARIO_ID_BASE + 130, "RECENT-QILIN",  "110 Intrusion — Qilin Check Point VPN auth-bypass zero-day (CVE-2026-50751)", _RECENT_QILIN),
+    (SCENARIO_ID_BASE + 131, "RECENT-AKIRA",  "103 Ransomware — Akira mass encryption + .akira + shadow-copy (top group Jun 2026)", _RECENT_AKIRA),
 ]
 
 

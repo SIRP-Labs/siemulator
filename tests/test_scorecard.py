@@ -89,7 +89,7 @@ def test_taxonomy_coverage_floor():
     117 Recon, 119 Benign, 123 Phishing."""
     tx = coverage()["taxonomy"]
     covered = set(tx["present"])
-    floor = {103, 105, 107, 109, 110, 111, 114, 117, 119, 123}
+    floor = {103, 105, 107, 109, 110, 111, 113, 114, 117, 119, 123}
     missing = floor - covered
     assert not missing, f"regressed taxonomy coverage: {sorted(missing)}"
 
