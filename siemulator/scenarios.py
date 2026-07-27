@@ -3057,6 +3057,82 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
 ]
 
 
+# ── Taxonomy reconciliation (2026-07-26) ────────────────────────────
+# The corpus was originally labeled on an older numbering that conflicts
+# with the authoritative 22-item taxonomy (labels.TAXONOMY). This table
+# is the single source of truth for the reconciliation — applied to the
+# parsed scenario dicts below so category ground truth is correct
+# everywhere (expected_iti_category_id / _name / _test_meta). Unambiguous
+# renumbers are name-exact matches; the four ambiguous classes (C2,
+# defense-evasion, malicious-PowerShell, privileged-access) were
+# adjudicated with Faiz on 2026-07-26:
+#   C2 -> 110 Intrusion; defense-evasion -> 107 Malware;
+#   PSH-A -> 119 Benign, PSH-B/C -> 107 Malware; priv-access -> 105.
+_CATEGORY_RECONCILE: dict[str, tuple[int, str]] = {
+    # ransomware (incl. WannaCry ENRICH-A) -> 103
+    "RANSOM-A": (103, "Ransomware"),
+    "RANSOM-B": (103, "Ransomware"),
+    "RANSOM-C": (103, "Ransomware"),
+    "ENRICH-A": (103, "Ransomware"),
+    # endpoint defense-evasion / malicious-endpoint -> 107 Malware
+    "TRELLIX-A": (107, "Malware"),
+    "RANSOM-D": (107, "Malware"),
+    "DEFENDER-A": (107, "Malware"),
+    "QR-VERSIP": (107, "Malware"),
+    "PSH-B": (107, "Malware"),
+    "PSH-C": (107, "Malware"),
+    # command-and-control -> 110 Intrusion
+    "ENRICH-B": (110, "Intrusion"),
+    "DNS-C2-A": (110, "Intrusion"),
+    "REAL-CS-A": (110, "Intrusion"),
+    "REAL-QR-A": (110, "Intrusion"),
+    # network anomaly: corpus 110 -> authoritative 114
+    "BENIGN-C2-A": (114, "Network Anomaly"),
+    "DEMO-C": (114, "Network Anomaly"),
+    "NETWITNESS-A": (114, "Network Anomaly"),
+    "OWNINFRA-A": (114, "Network Anomaly"),
+    "PA-DNS-A": (114, "Network Anomaly"),
+    "PA-SMB-A": (114, "Network Anomaly"),
+    "PA-SMB-B": (114, "Network Anomaly"),
+    "QR-PUBRES": (114, "Network Anomaly"),
+    "REAL-QR-B": (114, "Network Anomaly"),
+    "SCAN-A": (114, "Network Anomaly"),
+    "SCAN-B": (114, "Network Anomaly"),
+    "SCAN-C": (114, "Network Anomaly"),
+    # phishing -> 123
+    "DEMO-B": (123, "Phishing / Social Engineering"),
+    "DEMO-H": (123, "Phishing / Social Engineering"),
+    # cloud security: corpus 114 -> authoritative 111
+    "DEMO-E": (111, "Cloud Security"),
+    # data loss/exfiltration -> 109
+    "NOTION-EXFIL": (109, "Data Exfiltration"),
+    # benign admin PowerShell -> 119 Benign / Informational
+    "PSH-A": (119, "Benign / Informational"),
+    # privileged-access special-privilege logon -> 105 Privilege Escalation
+    "WIN-4672": (105, "Privilege Escalation"),
+}
+
+
+def _apply_category_reconcile() -> None:
+    """Rewrite category ground truth on the parsed scenario dicts to the
+    authoritative taxonomy. One-place source of truth; keeps
+    expected_iti_category_id / _name / _test_meta.expected_category_id
+    consistent so derive_label + the grader see the correct id."""
+    by_sid = {sid: raw for _oid, sid, _lbl, raw in SCENARIOS}
+    for sid, (new_id, new_name) in _CATEGORY_RECONCILE.items():
+        raw = by_sid.get(sid)
+        if raw is None:
+            continue
+        raw["expected_iti_category_id"] = new_id
+        raw["expected_iti_category_name"] = new_name
+        meta = raw.get("_test_meta")
+        if isinstance(meta, dict) and "expected_category_id" in meta:
+            meta["expected_category_id"] = new_id
+
+
+_apply_category_reconcile()
+
+
 _SEVERITY_NAME_TO_NUM = {
     "Critical": 9, "High": 7, "Medium": 5, "Low": 3, "Informational": 1,
 }

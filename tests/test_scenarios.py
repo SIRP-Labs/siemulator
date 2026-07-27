@@ -500,18 +500,20 @@ def test_v6_category_ids_match_guardrail_intent():
     out = scenarios.all_scenarios_as_qradar()
     by_sid = {s["_scenario_id"]: s for s in out}
 
-    # TRELLIX-A must ingest as 111 (Endpoint Defense Evasion), NOT 107,
-    # so never_ransomware_without_cat107_encryption is exercised on
-    # the correct category path.
-    assert by_sid["TRELLIX-A"]["_raw_alert"]["expected_iti_category_id"] == 111
+    # Post-reconciliation (authoritative taxonomy): 103 Ransomware is
+    # distinct from 107 Malware, which sharpens the guardrail split.
 
-    # RANSOM-D (locky.exe filename FP) must ingest as 111, NOT 107 —
-    # the whole point is that filename alone must not classify Ransomware.
-    assert by_sid["RANSOM-D"]["_raw_alert"]["expected_iti_category_id"] == 111
+    # RANSOM-A is confirmed ransomware (all four behavioural signals) ->
+    # 103 Ransomware, the positive baseline.
+    assert by_sid["RANSOM-A"]["_raw_alert"]["expected_iti_category_id"] == 103
 
-    # RANSOM-A must ingest as 107 (positive Ransomware baseline —
-    # all four required-evidence signals present).
-    assert by_sid["RANSOM-A"]["_raw_alert"]["expected_iti_category_id"] == 107
+    # RANSOM-D (locky.exe filename FP) must NOT ride RANSOM's 103 — with
+    # no encryption behaviour it is a malware sample, 107 Malware. This
+    # is the "filename alone is not ransomware" guardrail.
+    assert by_sid["RANSOM-D"]["_raw_alert"]["expected_iti_category_id"] == 107
+
+    # TRELLIX-A DLL side-loading is endpoint malware/evasion -> 107.
+    assert by_sid["TRELLIX-A"]["_raw_alert"]["expected_iti_category_id"] == 107
 
 
 def test_v6_literal_field_values_preserved():

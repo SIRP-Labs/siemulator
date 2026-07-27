@@ -82,12 +82,26 @@ def test_derive_label_prefers_explicit_expected_id():
 
 
 def test_taxonomy_coverage_floor():
-    """At least the currently-covered canonical categories stay covered."""
+    """At least the currently-covered canonical categories stay covered.
+    Post-reconciliation (2026-07-26) the corpus category ids are on the
+    authoritative taxonomy: 103 Ransomware, 105 Priv-Esc, 107 Malware,
+    109 Data Exfil, 110 Intrusion, 111 Cloud, 114 Network Anomaly,
+    117 Recon, 119 Benign, 123 Phishing."""
     tx = coverage()["taxonomy"]
     covered = set(tx["present"])
-    floor = {107, 108, 109, 110, 111, 112, 114, 117, 118, 119}
+    floor = {103, 105, 107, 109, 110, 111, 114, 117, 119, 123}
     missing = floor - covered
     assert not missing, f"regressed taxonomy coverage: {sorted(missing)}"
+
+
+def test_no_category_conflicts_after_reconciliation():
+    """The taxonomy reconciliation cleared every corpus-vs-authoritative
+    category-name conflict. Stays at zero (a new conflict means a
+    scenario was added on the wrong numbering)."""
+    from siemulator.scorecard import category_conflicts
+
+    conflicts = category_conflicts()
+    assert conflicts == [], f"category conflicts reappeared: {conflicts}"
 
 
 def test_complete_envelope_floor():
@@ -248,17 +262,12 @@ def test_authoritative_taxonomy_is_complete():
         assert cid in TAXONOMY, f"taxonomy missing tail {cid}"
 
 
-def test_category_conflicts_are_tracked():
-    """The corpus is (still) labeled on an older numbering than the
-    authoritative taxonomy — this pin documents the count so the
-    reconciliation can't be silently forgotten, and so a *reduction*
-    is visible when it lands. It is a tracker, not a zero-assertion."""
+def test_category_conflict_entries_name_both_sides():
+    """Whatever conflicts exist (zero after the 2026-07-26
+    reconciliation) each name both sides so a human can adjudicate — the
+    detector's output contract, kept even at zero."""
     from siemulator.scorecard import category_conflicts
 
-    conflicts = category_conflicts()
-    # Every conflict entry names both sides so a human can adjudicate.
-    for cf in conflicts:
+    for cf in category_conflicts():
         assert {"scenario_id", "category_id", "self_name",
                 "authoritative_name"} <= set(cf)
-    # Known baseline at time of writing (reconciliation pending).
-    assert len(conflicts) >= 1
