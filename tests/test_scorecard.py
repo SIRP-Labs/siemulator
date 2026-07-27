@@ -89,7 +89,7 @@ def test_taxonomy_coverage_floor():
     117 Recon, 119 Benign, 123 Phishing."""
     tx = coverage()["taxonomy"]
     covered = set(tx["present"])
-    floor = {103, 105, 107, 109, 110, 111, 113, 114, 117, 119, 123}
+    floor = {103, 105, 106, 107, 108, 109, 110, 111, 113, 114, 115, 117, 119, 123}
     missing = floor - covered
     assert not missing, f"regressed taxonomy coverage: {sorted(missing)}"
 
@@ -106,7 +106,7 @@ def test_no_category_conflicts_after_reconciliation():
 
 def test_complete_envelope_floor():
     """No fewer complete (fully-labeled) scenarios than the committed floor."""
-    assert coverage()["envelope"]["complete"] >= 32
+    assert coverage()["envelope"]["complete"] >= 44
 
 
 def test_benign_case_floor():
