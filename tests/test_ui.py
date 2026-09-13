@@ -103,7 +103,9 @@ def test_ui_links_to_github_and_docs():
 
 
 def test_ui_links_to_ingestion_guide():
-    """Pin the link to docs/ingestion-guide.md so it stays discoverable
-    from the live demo without code changes."""
+    """Pin that the ingestion guide stays discoverable from the live
+    demo. It now resolves on-host at /guide rather than sending the user
+    off to github.com — the intent (discoverable without code changes)
+    is unchanged; the destination got better."""
     body = _client().get("/").text
-    assert "docs/ingestion-guide.md" in body
+    assert 'href="/guide"' in body

@@ -704,8 +704,8 @@ _HTML_TEMPLATE = """<!doctype html>
       </p>
       <div class="hero-actions">
         <a class="primary" href="#try-it">▶ Try the live demo</a>
+        <a href="/guide">Ingestion guide</a>
         <a href="https://github.com/SIRP-Labs/siemulator" target="_blank" rel="noopener">GitHub ↗</a>
-        <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide ↗</a>
         <a href="/docs" target="_blank">OpenAPI</a>
       </div>
       <div class="hero-shields">
@@ -1188,8 +1188,8 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
     </div>
     <div class="footer-col">
       <h4>Docs</h4>
+      <a href="/guide">Ingestion guide</a>
       <a href="/docs" target="_blank">OpenAPI / Swagger</a>
-      <a href="https://github.com/SIRP-Labs/siemulator/blob/main/docs/ingestion-guide.md" target="_blank" rel="noopener">Ingestion guide</a>
       <a href="https://github.com/SIRP-Labs/siemulator/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
       <a href="https://github.com/SIRP-Labs/siemulator/issues" target="_blank" rel="noopener">Issue tracker</a>
     </div>

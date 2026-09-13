@@ -49,6 +49,14 @@ Issues = "https://github.com/sirp-labs/siemulator/issues"
 include = ["siemulator*"]
 exclude = ["tests*"]
 
+# The ingestion guide ships inside the package so /guide works from a
+# source checkout, the Docker image and `pip install siemulator` alike —
+# no static-files mount, no filesystem path assumptions. `docs/
+# ingestion-guide.md` stays the canonical externally-linked copy;
+# tests/test_guide.py pins the two byte-identical.
+[tool.setuptools.package-data]
+siemulator = ["*.md"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

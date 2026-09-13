@@ -51,6 +51,13 @@ def create_app() -> FastAPI:
         from siemulator.ui import build_router as build_ui_router
 
         app.include_router(build_ui_router())
+
+        # Ingestion guide at /guide (+ the URLs users guess). Served from
+        # the host so someone can configure their SOAR without leaving
+        # the site — /docs is Swagger, which is not what they're after.
+        from siemulator.guide import build_router as build_guide_router
+
+        app.include_router(build_guide_router())
     else:
         # Pure-API mode — / returns the same JSON metadata as /api/info.
         @app.get("/")
