@@ -102,17 +102,36 @@ def test_guide_renders_structure_not_raw_markdown():
 
 
 def test_guide_toc_anchors_resolve():
-    """The guide's own table of contents uses GitHub-style anchors, so
-    rendered headings must carry matching ids or in-page nav breaks."""
+    """Every anchor the guide's own table of contents links to must exist
+    as a heading id, or in-page navigation is dead.
+
+    This asserts EVERY TOC target rather than a hand-picked few — the
+    first version of this test sampled four punctuation-free anchors and
+    passed while 6 of the 8 platform recipes were broken.
+    """
+    import re
+
     body = _client().get("/guide").text
-    for anchor in (
-        "platform-recipes",
-        "choosing-a-surface",
-        "authentication-patterns",
-        "going-to-production",
-    ):
-        assert f'href="#{anchor}"' in body, f"TOC link missing: {anchor}"
-        assert f'id="{anchor}"' in body, f"no heading id for: {anchor}"
+    targets = set(re.findall(r'href="#([^"]+)"', body))
+    ids = set(re.findall(r'id="([^"]+)"', body))
+    assert targets, "no in-page links found — TOC missing?"
+    dangling = sorted(targets - ids)
+    assert not dangling, f"TOC links with no matching heading id: {dangling}"
+
+
+def test_slug_matches_github_for_punctuated_headings():
+    """GitHub drops punctuation but keeps the spaces around it, so
+    `SOAR / Resilient` yields a DOUBLE hyphen. Collapsing whitespace runs
+    breaks every heading containing / + or an em-dash."""
+    from siemulator.guide import _slug
+
+    assert _slug("Polling patterns + dedup") == "polling-patterns--dedup"
+    assert _slug("IBM QRadar SOAR / Resilient") == "ibm-qradar-soar--resilient"
+    assert _slug("Tines / n8n / Zapier") == "tines--n8n--zapier"
+    assert _slug("Elastic Stack — Logstash http_poller") == (
+        "elastic-stack--logstash-http_poller"
+    )
+    assert _slug("Platform recipes") == "platform-recipes"
 
 
 # ── the guessed URLs ────────────────────────────────────────────────

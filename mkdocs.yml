@@ -1,0 +1,85 @@
+# Documentation site — published to GitHub Pages by .github/workflows/pages.yml
+#
+# Why MkDocs and not Jekyll-from-/docs: Jekyll only converts markdown that
+# carries YAML front matter, which would mean editing
+# docs/ingestion-guide.md — the canonical, externally-linked copy that
+# tests/test_guide.py pins byte-identical to the packaged
+# siemulator/ingestion_guide.md served at /guide. MkDocs renders plain
+# markdown as-is, so that file stays pristine and all three consumers
+# (github.com, the live /guide route, this site) read one source.
+#
+# mkdocs-material is a CI-only build dependency; it adds nothing to the
+# package's three runtime deps.
+
+site_name: siemulator
+site_description: >-
+  Configure siemulator as an ingestion source in QRadar SOAR, Splunk SOAR,
+  Cortex XSOAR, Microsoft Sentinel, Elastic, Tines or a custom poller —
+  synthetic SIEM and EDR endpoints in real-vendor shapes for SOAR and agent
+  integration testing.
+site_url: https://sirp-labs.github.io/siemulator/
+repo_url: https://github.com/SIRP-Labs/siemulator
+repo_name: SIRP-Labs/siemulator
+edit_uri: edit/main/docs/
+copyright: MIT-licensed · SIRP Labs
+
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Overview: index.md
+  - Ingestion guide: ingestion-guide.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  # GitHub-compatible heading anchors. The guide's table of contents uses
+  # GitHub's slug form, where dropped punctuation leaves its surrounding
+  # spaces behind — "SOAR / Resilient" becomes `soar--resilient`. MkDocs'
+  # default slugify collapses those to a single hyphen, which silently
+  # breaks the TOC links for 6 of the 8 platform recipes.
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.details
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/SIRP-Labs/siemulator
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/siemulator/

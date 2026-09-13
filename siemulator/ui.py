@@ -1190,6 +1190,7 @@ curl -i "{qr}/api/siem/offenses?inject_malformed=1" -H "SEC: qradar-dev-token"</
       <h4>Docs</h4>
       <a href="/guide">Ingestion guide</a>
       <a href="/docs" target="_blank">OpenAPI / Swagger</a>
+      <a href="https://sirp-labs.github.io/siemulator/" target="_blank" rel="noopener">Docs site ↗</a>
       <a href="https://github.com/SIRP-Labs/siemulator/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
       <a href="https://github.com/SIRP-Labs/siemulator/issues" target="_blank" rel="noopener">Issue tracker</a>
     </div>

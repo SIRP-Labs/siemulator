@@ -80,13 +80,23 @@ _NUMBERED = re.compile(r"^(\s*)\d+\.\s+(.*)$")
 
 def _slug(text: str) -> str:
     """GitHub-compatible heading anchor, so the guide's own table of
-    contents links keep working once rendered."""
+    contents links keep working once rendered.
+
+    GitHub's algorithm: lowercase, drop everything that isn't
+    alphanumeric / underscore / space / hyphen, then map EACH remaining
+    space to one hyphen. The last step matters — dropping punctuation
+    leaves the spaces that surrounded it, so "SOAR / Resilient" ends up
+    with two spaces and therefore ``soar--resilient``. Collapsing
+    whitespace runs here (``\\s+``) silently breaks every heading
+    containing ``/``, ``+`` or an em-dash — which is 6 of the guide's 8
+    platform recipes.
+    """
     s = _INLINE_CODE.sub(r"\1", text)
     s = _BOLD.sub(r"\1", s)
     s = _LINK.sub(r"\1", s)
     s = s.lower().strip()
-    s = re.sub(r"[^\w\s-]", "", s)          # drop punctuation (— / ( ) etc.)
-    return re.sub(r"\s+", "-", s)
+    s = re.sub(r"[^\w\s-]", "", s)          # drop punctuation (— / + ( ) etc.)
+    return re.sub(r"\s", "-", s)            # per-space, NOT per-run
 
 
 def _inline(text: str) -> str:

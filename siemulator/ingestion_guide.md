@@ -558,7 +558,7 @@ on siemulator in CI / staging / a long-running test environment":
 
 1. **Stand up your own instance.** Don't depend on the public demo URL
    for anything load-bearing. Deploy options are in the README §
-   [Deploy on DigitalOcean App Platform](../README.md#deploy-on-digitalocean-app-platform);
+   [Deploy on DigitalOcean App Platform](https://github.com/SIRP-Labs/siemulator#deploy-on-digitalocean-app-platform);
    the Docker image is at `ghcr.io/sirp-labs/siemulator:latest`.
 
 2. **Rotate the tokens.** The public demo uses `logscale-dev-token` /

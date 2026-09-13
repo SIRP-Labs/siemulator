@@ -27,6 +27,8 @@ test harness, or an agent-chain integration test at when you want a
 stable, reproducible stream of realistic alerts without standing up
 real SIEMs or touching customer telemetry.
 
+**Documentation site:** <https://sirp-labs.github.io/siemulator/>
+
 A small **web UI** at `/` lets humans browse the scenarios, run
 endpoints interactively, and copy curl snippets — try the live demo at
 **https://siemulator-y7uhf.ondigitalocean.app**.
