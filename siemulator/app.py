@@ -20,6 +20,11 @@ from siemulator.splunk import build_router as build_splunk_router
 
 
 def create_app() -> FastAPI:
+    from siemulator.corpus import corpus_mode, create_corpus_app
+
+    if corpus_mode():
+        # Private corpus-only deployment: nothing synthetic is mounted.
+        return create_corpus_app()
     app = FastAPI(
         title="siemulator",
         version=__version__,
