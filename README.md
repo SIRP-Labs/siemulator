@@ -876,6 +876,30 @@ Contributions especially welcome on the highest-leverage gaps:
   template choice + IDs + timestamps reproducible across runs, so
   snapshot tests can pin exact responses instead of shape-only contracts.
 
+## Private corpus mode
+
+`SIEMULATOR_MODE=corpus` turns a deployment into a pass-through for a
+private, labelled corpus held somewhere else. It serves `GET <qradar
+prefix>/api/siem/offenses` **only**, filled by an authenticated `POST` to
+`SIEMULATOR_CORPUS_UPSTREAM_URL` + `/api/internal/quality-corpus/offences?target_host=<SIEMULATOR_CORPUS_TARGET_HOST>`
+(header `x-corpus-export-key: <SIEMULATOR_CORPUS_UPSTREAM_KEY>`), which must
+answer `{"offences": [...]}`.
+
+Use it when the poller points at a real tenant and must never receive
+synthetic attacks:
+
+| | public mode | corpus mode |
+|---|---|---|
+| `?scenarios=` / `?extras=` / `?labels=` | honoured | ignored — always the corpus |
+| upstream down / unconfigured | n/a | `[]`, reason in `X-Mock-Corpus-Upstream` (`error` / `unconfigured`) — never a fallback |
+| tokens | QRadar or LogScale, dev defaults | `SIEMULATOR_QRADAR_TOKEN` only, must be set (503 otherwise) |
+| other surfaces (LogScale, Splunk, vendor-native, UI, `/docs`, sessions, faults, `/api/siem/scenarios`) | mounted | not mounted (404) |
+
+No corpus data is stored in this repository or in the process; the
+upstream decides what is served and stamps it served. Deploy it as a
+**separate** app from any public instance — `.do/corpus.app.yaml` is the
+template, and all four corpus settings plus the token go in as secrets.
+
 ## Deploy on DigitalOcean App Platform
 
 A ready-to-apply spec ships at [`.do/app.yaml`](.do/app.yaml). It uses

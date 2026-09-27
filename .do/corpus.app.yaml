@@ -1,0 +1,61 @@
+# DigitalOcean App Platform spec for a PRIVATE corpus-only siemulator.
+#
+# A separate app from the public demo (.do/app.yaml), with its own secrets.
+# It serves only offences pulled from the upstream corpus export; nothing
+# synthetic is mounted (see README "Private corpus mode").
+#
+#   doctl apps create --spec .do/corpus.app.yaml
+#
+# Then set the SECRET values in the dashboard (Settings → web → Environment
+# Variables) or via an unencrypted copy that is never committed. Leave the
+# app's URL unpublished.
+
+name: siemulator-corpus
+region: nyc
+
+services:
+  - name: web
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: SIRP-Labs/siemulator
+    dockerfile_path: /Dockerfile
+    source_dir: /
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+
+    health_check:
+      http_path: /api/info
+      initial_delay_seconds: 10
+      period_seconds: 30
+      timeout_seconds: 3
+      success_threshold: 1
+      failure_threshold: 3
+
+    envs:
+      - key: SIEMULATOR_MODE
+        scope: RUN_TIME
+        value: corpus
+      - key: SIEMULATOR_UI_ENABLED
+        scope: RUN_TIME
+        value: "false"
+      - key: SIEMULATOR_QRADAR_PREFIX
+        scope: RUN_TIME
+        value: /qradar
+      - key: SIEMULATOR_PORT
+        scope: RUN_TIME
+        value: "8080"
+      # SECRET — values intentionally absent.
+      - key: SIEMULATOR_QRADAR_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: SIEMULATOR_CORPUS_UPSTREAM_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: SIEMULATOR_CORPUS_UPSTREAM_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: SIEMULATOR_CORPUS_TARGET_HOST
+        scope: RUN_TIME
+        type: SECRET

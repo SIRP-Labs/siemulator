@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Private corpus-only mode** (`SIEMULATOR_MODE=corpus`). The deployment serves only
+  offences pulled from an authenticated upstream
+  (`SIEMULATOR_CORPUS_UPSTREAM_URL` / `_KEY` / `_TARGET_HOST`), whatever the query
+  string asks for. It is meant for pointing a poller at a real tenant:
+  - no synthetic scenario, template or extra is ever served;
+  - an upstream failure or missing config returns `[]` and says why in
+    `X-Mock-Corpus-Upstream`;
+  - the LogScale, Splunk, vendor-native, UI, session, fault and scenario surfaces are not
+    mounted;
+  - only an explicitly set `SIEMULATOR_QRADAR_TOKEN` opens it;
+  - the key is never sent over plain http.
+  - `.do/corpus.app.yaml` is the deployment template.
+
 ## [0.1.0] — 2026-06-07
 
 Initial release. Extracted from [sara-open](https://github.com/sirp-labs/sara-open)
