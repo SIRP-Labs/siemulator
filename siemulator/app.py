@@ -25,6 +25,11 @@ def create_app() -> FastAPI:
     if corpus_mode():
         # Private corpus-only deployment: nothing synthetic is mounted.
         return create_corpus_app()
+    from siemulator.pinned import create_pinned_app, pinned_mode
+
+    if pinned_mode():
+        # Private pinned-scenario deployment: only the named showcase scenarios.
+        return create_pinned_app()
     app = FastAPI(
         title="siemulator",
         version=__version__,
