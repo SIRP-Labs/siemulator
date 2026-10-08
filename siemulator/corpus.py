@@ -93,11 +93,12 @@ async def fetch_corpus_offences() -> tuple[list[dict], str]:
         return [], "error"
 
 
-def _check_corpus_auth(request: Request) -> None:
-    """Only an explicitly configured ``SIEMULATOR_QRADAR_TOKEN`` opens the mode."""
+def check_private_token(request: Request, mode: str) -> None:
+    """Only an explicitly configured, non-default ``SIEMULATOR_QRADAR_TOKEN``
+    opens a private mode (corpus, pinned)."""
     expected = os.environ.get("SIEMULATOR_QRADAR_TOKEN", "")
     if not expected or expected == "qradar-dev-token":
-        raise HTTPException(503, "corpus mode requires SIEMULATOR_QRADAR_TOKEN")
+        raise HTTPException(503, f"{mode} mode requires SIEMULATOR_QRADAR_TOKEN")
     auth = request.headers.get("Authorization", "")
     supplied = (
         request.query_params.get("token", "")
@@ -106,6 +107,11 @@ def _check_corpus_auth(request: Request) -> None:
     )
     if not (supplied and secrets.compare_digest(supplied, expected)):
         raise HTTPException(401, "invalid token")
+
+
+def _check_corpus_auth(request: Request) -> None:
+    """Only an explicitly configured ``SIEMULATOR_QRADAR_TOKEN`` opens the mode."""
+    check_private_token(request, "corpus")
 
 
 def build_corpus_router() -> APIRouter:

@@ -900,6 +900,51 @@ upstream decides what is served and stamps it served. Deploy it as a
 **separate** app from any public instance — `.do/corpus.app.yaml` is the
 template, and all four corpus settings plus the token go in as secrets.
 
+## Private pinned mode
+
+`SIEMULATOR_MODE=pinned` serves only the hand-written scenarios named in
+`SIEMULATOR_PINNED_SCENARIOS` (comma-separated; today: `SHOWCASE-PHISH-1`).
+Use it when one predictable incident has to land in a real SOAR tenant: a
+screen recording, or a live approve→execute test.
+
+`SHOWCASE-PHISH-1` is an invoice-phishing story: a shared AP mailbox gets a
+look-alike "overdue invoice", the attachment's script launches an encoded
+PowerShell download, rundll32 loads the payload, and the host beacons out
+every 60 s. It carries a sender, two look-alike domains, two URLs, three
+external IPs, three file hashes and one host, so there is plenty to enrich
+and a clear containment action to propose (isolate the host, block the C2 IP).
+
+| | public mode | pinned mode |
+|---|---|---|
+| `?scenarios=` / `?extras=` / `?labels=` / `Range` | honoured | ignored — always the pinned offences |
+| repeat polls | depends on `?scenarios=` | each pinned offence **once per process** (`SIEMULATOR_PINNED_REPEAT=true` to repeat) |
+| unknown / empty selection | n/a | `[]`, reason in `X-Mock-Pinned` (`unknown:<ids>` / `none-configured`) |
+| timestamps | authored | re-based so the newest event is ~3 min old (`SIEMULATOR_PINNED_RETIME=false` to keep) |
+| tokens | QRadar or LogScale, dev defaults | `SIEMULATOR_QRADAR_TOKEN` only, must be set and non-default (503 otherwise) |
+| other surfaces (LogScale, Splunk, vendor-native, UI, `/docs`, sessions, faults, `/api/siem/scenarios`) | mounted | not mounted (404) |
+
+Content rules for every pinnable scenario, enforced by
+`tests/test_pinned_mode.py`: IPv4 only from the RFC 5737 documentation
+ranges (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), hostnames and
+mail domains only under `.example.test`, mailboxes and accounts are roles
+(never a person's name), file hashes are fictional (enrichment returns
+"unknown", honestly), and no test metadata or answer key reaches the offence.
+Pinned offence ids start at 95001 and never overlap the public library.
+
+The QRadar actions a SOAR runs back are accepted and only **recorded** in
+memory, so an approve→execute test has a real target with nothing external
+to undo: `POST /api/reference_data/sets/<name>?value=<v>` (block an IP,
+domain or hash) and `POST /api/siem/offenses/<id>/notes?note_text=<t>`. Read
+them back with the matching `GET`s as evidence. Responses carry
+`X-Mock-Simulated-Action` and `"simulated": true`.
+
+Set `SIEMULATOR_QRADAR_PREFIX=/` to serve at the root, which is where SIRP's
+QRadar app scripts call (`https://<server>/api/siem/offenses`).
+
+The serve-once set and the recorded actions live in memory: a restart
+serves the offences again and forgets the actions.
+Deploy it as a **separate** app; `.do/pinned.app.yaml` is the template.
+
 ## Deploy on DigitalOcean App Platform
 
 A ready-to-apply spec ships at [`.do/app.yaml`](.do/app.yaml). It uses

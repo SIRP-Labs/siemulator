@@ -1,0 +1,67 @@
+# DigitalOcean App Platform spec for a PRIVATE pinned-scenario siemulator.
+#
+# A separate app from the public demo (.do/app.yaml) and the corpus app, with
+# its own secret token. It serves only the scenarios named in
+# SIEMULATOR_PINNED_SCENARIOS, each once per process (see README
+# "Private pinned mode").
+#
+#   doctl apps create --spec .do/pinned.app.yaml
+#
+# Then set SIEMULATOR_QRADAR_TOKEN in the dashboard (Settings → web →
+# Environment Variables). Use a fresh random value, never the dev default.
+# Leave the app's URL unpublished.
+#
+# Each restart or redeploy serves the pinned offences again (the serve-once
+# set lives in memory). The offence id is stable, so a consumer that dedups by
+# id still creates one incident; one that does not would create a second.
+
+name: siemulator-pinned
+region: nyc
+
+services:
+  - name: web
+    github:
+      branch: main
+      deploy_on_push: false
+      repo: SIRP-Labs/siemulator
+    dockerfile_path: /Dockerfile
+    source_dir: /
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+
+    health_check:
+      http_path: /api/info
+      initial_delay_seconds: 10
+      period_seconds: 30
+      timeout_seconds: 3
+      success_threshold: 1
+      failure_threshold: 3
+
+    envs:
+      - key: SIEMULATOR_MODE
+        scope: RUN_TIME
+        value: pinned
+      - key: SIEMULATOR_PINNED_SCENARIOS
+        scope: RUN_TIME
+        value: SHOWCASE-PHISH-1
+      - key: SIEMULATOR_PINNED_REPEAT
+        scope: RUN_TIME
+        value: "false"
+      - key: SIEMULATOR_PINNED_RETIME
+        scope: RUN_TIME
+        value: "true"
+      - key: SIEMULATOR_UI_ENABLED
+        scope: RUN_TIME
+        value: "false"
+      # Root: SIRP's QRadar app scripts call https://<server>/api/siem/... .
+      - key: SIEMULATOR_QRADAR_PREFIX
+        scope: RUN_TIME
+        value: /
+      - key: SIEMULATOR_PORT
+        scope: RUN_TIME
+        value: "8080"
+      # SECRET — value intentionally absent.
+      - key: SIEMULATOR_QRADAR_TOKEN
+        scope: RUN_TIME
+        type: SECRET

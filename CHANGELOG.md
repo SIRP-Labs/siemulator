@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 ### Added
+- **Private pinned-scenario mode** (`SIEMULATOR_MODE=pinned` +
+  `SIEMULATOR_PINNED_SCENARIOS`). Serves only the named hand-written scenarios, each
+  once per process, whatever the query asks for; nothing else is mounted. Only an
+  explicitly set, non-default `SIEMULATOR_QRADAR_TOKEN` opens it. Timestamps are
+  re-based at serve time. `.do/pinned.app.yaml` is the deployment template.
+  QRadar reference-set adds and offence notes are accepted and only recorded
+  (simulated containment for approve→execute tests); `SIEMULATOR_QRADAR_PREFIX=/`
+  serves at the root for SIRP's QRadar app scripts.
+- **`SHOWCASE-PHISH-1`**: invoice phishing → script → PowerShell download → rundll32 →
+  60 s beacon, using RFC 5737 IPs, `.example.test` hosts, role accounts and fictional
+  hashes only (offence id 95001). Tests pin the content rules.
 - **Private corpus-only mode** (`SIEMULATOR_MODE=corpus`). The deployment serves only
   offences pulled from an authenticated upstream
   (`SIEMULATOR_CORPUS_UPSTREAM_URL` / `_KEY` / `_TARGET_HOST`), whatever the query
