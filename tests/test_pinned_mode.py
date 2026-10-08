@@ -201,3 +201,66 @@ def test_served_offence_starts_recently(pinned_env):
     o = _get(_client()).json()[0]
     start = datetime.fromtimestamp(o["start_time"] / 1000, tz=timezone.utc)
     assert timedelta(0) < datetime.now(timezone.utc) - start < timedelta(minutes=30)
+
+
+# ── SIRP's QRadar app scripts, as they actually call ────────────────
+# automation-engine apps/Qradar/qradar.py (ingestion) and refset_ip_dynamic.py
+# (containment) call https://<server>/api/... with no /qradar prefix, a
+# lower-case `sec` header, and a start_time filter of "now - 30 min" or the
+# last saved start_time.
+
+
+@pytest.fixture
+def root_env(pinned_env):
+    pinned_env.setenv("SIEMULATOR_QRADAR_PREFIX", "/")
+    return pinned_env
+
+
+def test_the_sirp_ingestion_script_poll_gets_the_offence_once(root_env):
+    c = _client()
+    t30 = int((datetime.now(timezone.utc) - timedelta(minutes=30)).timestamp() * 1000)
+    url = f"/api/siem/offenses?filter=status%3D%22Open%22%20and%20start_time%20%3E%3D%20{t30}"
+    first = c.get(url, headers={"Accept": "application/json", "sec": TOKEN})
+    assert first.status_code == 200
+    offences = first.json()
+    assert [o["id"] for o in offences] == [OID]
+    o = offences[0]
+    # The script keeps only start_time > curr_time, maps magnitude 8 -> "High",
+    # and needs id / start_time / magnitude.
+    assert o["start_time"] > t30 and int(o["magnitude"]) > 6
+    assert c.get(url, headers={"sec": TOKEN}).json() == []
+
+
+def test_the_sirp_block_ip_action_is_recorded_not_executed(root_env):
+    c = _client()
+    hdrs = {"SEC": TOKEN, "Version": "7.1", "content-type": "application/json", "accept": "application/json"}
+    r = c.post("/api/reference_data/sets/SOAR_Blocked_IPs?value=203.0.113.88", headers=hdrs)
+    assert r.status_code == 200 and r.json()["simulated"] is True
+    assert r.headers["X-Mock-Simulated-Action"] == "reference_set_add"
+    c.post("/api/reference_data/sets/SOAR_Blocked_IPs?value=203.0.113.88", headers=hdrs)  # idempotent
+    got = c.get("/api/reference_data/sets/SOAR_Blocked_IPs", headers=hdrs).json()
+    assert [e["value"] for e in got["data"]] == ["203.0.113.88"]
+    assert c.get("/api/reference_data/sets/other", headers=hdrs).json()["number_of_elements"] == 0
+
+
+def test_offence_notes_are_recorded_for_pinned_offences_only(root_env):
+    c = _client()
+    h = {"SEC": TOKEN}
+    r = c.post(f"/api/siem/offenses/{OID}/notes?note_text=Contained%20by%20SOAR", headers=h)
+    assert r.status_code == 200 and r.json()["id"] == 1
+    assert [n["note_text"] for n in c.get(f"/api/siem/offenses/{OID}/notes", headers=h).json()] == ["Contained by SOAR"]
+    assert c.post("/api/siem/offenses/90011/notes?note_text=x", headers=h).status_code == 404
+
+
+@pytest.mark.parametrize("method,path", [
+    ("post", "/api/reference_data/sets/S?value=203.0.113.88"),
+    ("get", "/api/reference_data/sets/S"),
+    ("post", f"/api/siem/offenses/{OID}/notes?note_text=x"),
+    ("get", f"/api/siem/offenses/{OID}/notes"),
+])
+def test_simulated_actions_need_the_token(root_env, method, path):
+    assert getattr(_client(), method)(path, headers={"SEC": "wrong"}).status_code == 401
+
+
+def test_a_block_without_a_value_is_refused(root_env):
+    assert _client().post("/api/reference_data/sets/S", headers={"SEC": TOKEN}).status_code == 422

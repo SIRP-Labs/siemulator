@@ -24,6 +24,12 @@ What the mode guarantees:
   person (tests/test_pinned_mode.py pins all three).
 - Timestamps are re-based at first serve so the newest event is a few minutes
   old (``SIEMULATOR_PINNED_RETIME=false`` keeps the authored times).
+- The QRadar actions a SOAR runs back (add a value to a reference set, add an
+  offence note) are accepted and only RECORDED in memory, readable back via the
+  matching GETs. There is no real QRadar behind them, so an approve→execute
+  test exercises the whole path with nothing external to undo.
+- ``SIEMULATOR_QRADAR_PREFIX=/`` serves at the root, where SIRP's QRadar app
+  scripts call.
 - The LogScale, Splunk and vendor-native surfaces, the web UI, sessions,
   fault injection and the scenario listing are not mounted at all.
 """
@@ -288,17 +294,33 @@ def _all_times(node: Any) -> list[str]:
 
 _SERVED: set[int] = set()
 _LOCK = threading.Lock()
+# Simulated containment / case actions received (in memory; a restart clears it).
+_REFSETS: dict[str, list[dict]] = {}
+_NOTES: dict[int, list[dict]] = {}
 
 
 def reset_served() -> None:
-    """Forget what has been served (tests; a restart does the same)."""
+    """Forget what has been served and every simulated action
+    (tests; a restart does the same)."""
     with _LOCK:
         _SERVED.clear()
+        _REFSETS.clear()
+        _NOTES.clear()
+
+
+def _prefix() -> str:
+    """The QRadar prefix; ``/`` (or empty) serves at the root, which is where
+    SIRP's QRadar app scripts call (``https://<server>/api/siem/offenses``)."""
+    return qradar_prefix().rstrip("/")
+
+
+def _now_ms() -> int:
+    return int(datetime.now(timezone.utc).timestamp() * 1000)
 
 
 def build_pinned_router() -> APIRouter:
     """The QRadar-shaped surface of a pinned-scenario deployment."""
-    router = APIRouter(prefix=qradar_prefix(), tags=["qradar-pinned"])
+    router = APIRouter(prefix=_prefix(), tags=["qradar-pinned"])
 
     @router.get("/")
     @router.get("/api/help")
@@ -345,6 +367,64 @@ def build_pinned_router() -> APIRouter:
                     return as_qradar_offence(sid)
         raise HTTPException(404, "offense not found")
 
+    # ── Simulated actions ────────────────────────────────────────────
+    # The containment / case actions a SOAR runs against QRadar land here
+    # and are only RECORDED: there is no real QRadar behind this, so an
+    # approve→execute test exercises the full path with nothing to undo.
+
+    @router.post("/api/reference_data/sets/{name}")
+    async def add_to_reference_set(name: str, request: Request, response: Response,
+                                   value: str = ""):
+        """QRadar 'add value to reference set' (e.g. block an IP). Recorded only."""
+        check_private_token(request, "pinned")
+        if not value:
+            raise HTTPException(422, "value is required")
+        with _LOCK:
+            elements = _REFSETS.setdefault(name, [])
+            if value not in [e["value"] for e in elements]:
+                elements.append({"value": value, "first_seen": _now_ms(), "source": "reference data api"})
+            n = len(elements)
+        response.headers["X-Mock-Source"] = MOCK_SOURCE
+        response.headers["X-Mock-Simulated-Action"] = "reference_set_add"
+        return {"name": name, "element_type": "ALN", "number_of_elements": n,
+                "creation_time": _now_ms(), "timeout_type": "FIRST_SEEN",
+                "x-mock-source": MOCK_SOURCE, "simulated": True}
+
+    @router.get("/api/reference_data/sets/{name}")
+    async def get_reference_set(name: str, request: Request, response: Response):
+        """What the simulated actions put in a reference set (evidence for a live test)."""
+        check_private_token(request, "pinned")
+        with _LOCK:
+            elements = list(_REFSETS.get(name, []))
+        response.headers["X-Mock-Source"] = MOCK_SOURCE
+        return {"name": name, "element_type": "ALN", "number_of_elements": len(elements),
+                "data": elements, "x-mock-source": MOCK_SOURCE, "simulated": True}
+
+    @router.post("/api/siem/offenses/{offense_id}/notes")
+    async def add_offense_note(offense_id: int, request: Request, response: Response,
+                               note_text: str = ""):
+        """QRadar 'add note to offence'. Recorded only."""
+        check_private_token(request, "pinned")
+        known, _ = pinned_ids()
+        if offense_id not in {PINNABLE[s][0] for s in known}:
+            raise HTTPException(404, "offense not found")
+        note = {"id": 0, "note_text": note_text, "create_time": _now_ms(), "username": "API_token: soar"}
+        with _LOCK:
+            notes = _NOTES.setdefault(offense_id, [])
+            note["id"] = len(notes) + 1
+            notes.append(note)
+        response.headers["X-Mock-Source"] = MOCK_SOURCE
+        response.headers["X-Mock-Simulated-Action"] = "offense_note_add"
+        return note
+
+    @router.get("/api/siem/offenses/{offense_id}/notes")
+    async def list_offense_notes(offense_id: int, request: Request, response: Response):
+        check_private_token(request, "pinned")
+        with _LOCK:
+            notes = list(_NOTES.get(offense_id, []))
+        response.headers["X-Mock-Source"] = MOCK_SOURCE
+        return notes
+
     return router
 
 
@@ -364,5 +444,5 @@ def create_pinned_app() -> FastAPI:
     app.include_router(build_pinned_router())
     if access_log_enabled():
         from siemulator.access_log import AccessLogMiddleware
-        app.add_middleware(AccessLogMiddleware, bound_prefixes=(qradar_prefix(),))
+        app.add_middleware(AccessLogMiddleware, bound_prefixes=(_prefix() or "/",))
     return app

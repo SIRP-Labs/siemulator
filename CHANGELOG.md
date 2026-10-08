@@ -8,6 +8,9 @@
   once per process, whatever the query asks for; nothing else is mounted. Only an
   explicitly set, non-default `SIEMULATOR_QRADAR_TOKEN` opens it. Timestamps are
   re-based at serve time. `.do/pinned.app.yaml` is the deployment template.
+  QRadar reference-set adds and offence notes are accepted and only recorded
+  (simulated containment for approve→execute tests); `SIEMULATOR_QRADAR_PREFIX=/`
+  serves at the root for SIRP's QRadar app scripts.
 - **`SHOWCASE-PHISH-1`**: invoice phishing → script → PowerShell download → rundll32 →
   60 s beacon, using RFC 5737 IPs, `.example.test` hosts, role accounts and fictional
   hashes only (offence id 95001). Tests pin the content rules.

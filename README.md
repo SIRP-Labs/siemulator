@@ -931,7 +931,18 @@ mail domains only under `.example.test`, mailboxes and accounts are roles
 "unknown", honestly), and no test metadata or answer key reaches the offence.
 Pinned offence ids start at 95001 and never overlap the public library.
 
-The serve-once set lives in memory: a restart serves the offences again.
+The QRadar actions a SOAR runs back are accepted and only **recorded** in
+memory, so an approve→execute test has a real target with nothing external
+to undo: `POST /api/reference_data/sets/<name>?value=<v>` (block an IP,
+domain or hash) and `POST /api/siem/offenses/<id>/notes?note_text=<t>`. Read
+them back with the matching `GET`s as evidence. Responses carry
+`X-Mock-Simulated-Action` and `"simulated": true`.
+
+Set `SIEMULATOR_QRADAR_PREFIX=/` to serve at the root, which is where SIRP's
+QRadar app scripts call (`https://<server>/api/siem/offenses`).
+
+The serve-once set and the recorded actions live in memory: a restart
+serves the offences again and forgets the actions.
 Deploy it as a **separate** app; `.do/pinned.app.yaml` is the template.
 
 ## Deploy on DigitalOcean App Platform

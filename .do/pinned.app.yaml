@@ -54,9 +54,10 @@ services:
       - key: SIEMULATOR_UI_ENABLED
         scope: RUN_TIME
         value: "false"
+      # Root: SIRP's QRadar app scripts call https://<server>/api/siem/... .
       - key: SIEMULATOR_QRADAR_PREFIX
         scope: RUN_TIME
-        value: /qradar
+        value: /
       - key: SIEMULATOR_PORT
         scope: RUN_TIME
         value: "8080"
