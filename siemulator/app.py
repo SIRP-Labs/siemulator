@@ -10,12 +10,14 @@ from siemulator.config import (
     MOCK_SOURCE,
     access_log_enabled,
     logscale_prefix,
+    netwitness_prefix,
     qradar_prefix,
     sessions_enabled,
     splunk_prefix,
     ui_enabled,
 )
 from siemulator.logscale import build_router as build_logscale_router
+from siemulator.netwitness import build_router as build_netwitness_router
 from siemulator.qradar import build_router as build_qradar_router
 from siemulator.splunk import build_router as build_splunk_router
 
@@ -60,10 +62,11 @@ def create_app() -> FastAPI:
 
     app.include_router(build_advisory_router())
     app.include_router(build_logscale_router())
+    app.include_router(build_netwitness_router())
     app.include_router(build_qradar_router())
     app.include_router(build_splunk_router())
 
-    bound_prefixes = (logscale_prefix(), qradar_prefix(), splunk_prefix())
+    bound_prefixes = (logscale_prefix(), netwitness_prefix(), qradar_prefix(), splunk_prefix())
 
     # Fault injection — middleware for malformed-JSON path, dependency
     # already wired into all three routers for status / latency injection.

@@ -36,6 +36,14 @@ def splunk_prefix() -> str:
     return os.environ.get("SIEMULATOR_SPLUNK_PREFIX", "/splunk")
 
 
+def netwitness_prefix() -> str:
+    return os.environ.get("SIEMULATOR_NETWITNESS_PREFIX", "/nw")
+
+
+def netwitness_token() -> str:
+    return os.environ.get("SIEMULATOR_NETWITNESS_TOKEN", "netwitness-dev-token")
+
+
 def host() -> str:
     return os.environ.get("SIEMULATOR_HOST", "0.0.0.0")
 
