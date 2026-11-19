@@ -841,6 +841,32 @@ _DEMO_H = _j(r"""
 """)
 
 
+# LAB-PHISH-A (2026-11-19): DEMO-B's shape with lab-only values (RFC 2606 domains,
+# RFC 5737 IP), for demo orgs that run the SIRP Lab containment stand-ins, which
+# refuse any value that could be real. Offence ID 90089 (the slot after DEMO-H).
+_LAB_PHISH_A = _j(r"""
+{
+  "source": "QRadar", "event_type": "PhishingEmail",
+  "timestamp": "2026-11-19T09:42:11Z", "severity": "High", "confidence": 80,
+  "category": "123 Phishing",
+  "alert": {"name": "Phishing email — credential-harvest link (lab values)",
+            "description": "Inbound email with a credential-harvest link reported by the recipient. All indicators are documentation values (RFC 2606 / RFC 5737)."},
+  "message": {"from": "billing@phish.example.net",
+              "to": ["finance.team@corp.example.com"],
+              "subject": "Action required: verify your account",
+              "sender_ip": "203.0.113.45",
+              "sender_domain": "phish.example.net",
+              "url": "https://login-phish.example/verify"},
+  "iocs": [
+    {"type": "ip", "value": "203.0.113.45", "pattern": "rfc5737_testnet"},
+    {"type": "domain", "value": "phish.example.net", "pattern": "rfc2606_example"},
+    {"type": "url", "value": "https://login-phish.example/verify", "pattern": "rfc2606_example"}
+  ],
+  "expected_verdict": "MALICIOUS",
+  "note": "Lab twin of DEMO-B: every indicator is a documentation value, so lab stand-ins accept it and no real system can be named."
+}
+""")
+
 # ── v4 SCAN payloads (2026-06-09) — authorized-pentest recon chain ──
 #
 # Three sibling alerts from the same actor (SECTEAM\\pentester-01) and same
@@ -4012,6 +4038,8 @@ SCENARIOS: list[tuple[int, str, str, dict]] = [
     (SCENARIO_ID_BASE + 86, "DEMO-F", "107 Malware — quarantined binary, synthetic hash only", _DEMO_F),
     (SCENARIO_ID_BASE + 87, "DEMO-G", "107 Malware — CORPB service acct ad-hoc PowerShell (NetBIOS-only IOC)", _DEMO_G),
     (SCENARIO_ID_BASE + 88, "DEMO-H", "108 Phishing — sender IP is real Tor exit (only TI hit in demo corpus)", _DEMO_H),
+    # Lab twin of DEMO-B for demo orgs with SIRP Lab stand-ins (2026-11-19). Offence ID 90089.
+    (SCENARIO_ID_BASE + 89, "LAB-PHISH-A", "123 Phishing — credential-harvest link, lab-only values (RFC 2606/5737)", _LAB_PHISH_A),
     # v4 SCAN payloads (2026-06-09) — authorized-pentest recon chain.
     # 3 alerts share source_ip + actor so related_incidents clusters them.
     # Offence IDs 90091-90093 (leaving 90089/90090 as buffer after DEMO-H).
